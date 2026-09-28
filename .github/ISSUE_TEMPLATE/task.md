@@ -3,7 +3,7 @@ name: 작업 (Task)
 about: 설정 추가·변경, 구성 개선 등 일반 작업
 title: "[Task] "
 labels: type:task
-assignees: ["author"]
+assignees: kyulimii
 ---
 
 ## 목적

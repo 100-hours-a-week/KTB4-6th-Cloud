@@ -3,7 +3,7 @@ name: 변경 요청 (Change-Request)
 about: 환경변수 추가, 포트·라우팅 변경 등 팀원의 인프라 변경 요청
 title: "[Change] "
 labels: type:change-request
-assignees: ["author"]
+assignees: kyulimii
 ---
 
 ## 요청자

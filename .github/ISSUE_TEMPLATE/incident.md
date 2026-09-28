@@ -3,6 +3,7 @@ name: 장애 (Incident)
 about: 서비스 장애 발생 및 대응 기록
 title: "[Incident] "
 labels: type:incident, priority:high
+assignees: ["author"]
 ---
 
 ## 발생 시각

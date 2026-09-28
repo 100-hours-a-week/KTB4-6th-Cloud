@@ -1,0 +1,15 @@
+# secrets
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.crt
+**/ssl/
+
+# runtime data
+**/logs/
+*.log
+**/acme-challenge/
+*.sql
+*.sql.gz

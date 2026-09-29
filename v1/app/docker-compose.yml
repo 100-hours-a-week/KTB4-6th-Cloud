@@ -22,6 +22,8 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/acme-challenge:/var/www/certbot:ro
       - /etc/nginx/ssl:/etc/nginx/ssl:ro
+    environment:
+      BUG_REPORT_DISCORD_WEBHOOK_URL: "${BUG_REPORT_DISCORD_WEBHOOK_URL}"
     networks:
       - web_net
       - internal_net

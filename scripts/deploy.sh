@@ -30,7 +30,9 @@ SHA=$(git rev-parse --short HEAD)
 # git이 추적하는 파일만, 내용(checksum) 기준으로 전송. .env는 서버 전용이라 제외
 sync() {
   git -C "$SRC_DIR" ls-files -z \
-    | rsync -lptvc --from0 --files-from=- --exclude '.env' "$@" "$SRC_DIR/" "$HOST:$REMOTE_DIR/"
+    | rsync -lptvc --from0 --files-from=- \
+        --exclude '.env' --exclude '.env.example' \
+        "$@" "$SRC_DIR/" "$HOST:$REMOTE_DIR/"
 }
 
 # 3) 미리보기

@@ -31,7 +31,7 @@ SHA=$(git rev-parse --short HEAD)
 sync() {
   git -C "$SRC_DIR" ls-files -z \
     | rsync -lptvc --from0 --files-from=- \
-        --exclude '.env' --exclude '.env.example' \
+        --exclude '.env.example' \
         "$@" "$SRC_DIR/" "$HOST:$REMOTE_DIR/"
 }
 

@@ -22,8 +22,6 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/acme-challenge:/var/www/certbot:ro
       - /etc/nginx/ssl:/etc/nginx/ssl:ro
-    environment:
-      BUG_REPORT_DISCORD_WEBHOOK_URL: "${BUG_REPORT_DISCORD_WEBHOOK_URL}"
     networks:
       - web_net
       - internal_net
@@ -43,6 +41,7 @@ services:
       NEXT_PUBLIC_API_BASE_URL: "${NEXT_PUBLIC_API_BASE_URL}"
       NEXT_PUBLIC_GA_ID: "${NEXT_PUBLIC_GA_ID}"
       AUTH_COOKIE_DOMAIN: "${AUTH_COOKIE_DOMAIN}"
+      BUG_REPORT_DISCORD_WEBHOOK_URL: "${BUG_REPORT_DISCORD_WEBHOOK_URL}"
       TZ: Asia/Seoul
       # HOSTNAME: "0.0.0.0"
     networks:

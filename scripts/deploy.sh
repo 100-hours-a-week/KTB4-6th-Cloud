@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# 사용법: ./scripts/deploy.sh <app|data|ai> [--env]
+# 사용법: ./scripts/deploy.sh <app|data|ai> [--dev] [--env]
 #   --env  로컬 .env도 서버에 반영 (키만 비교해서 표시, 기존 .env는 백업)
-# 레포의 v1/<대상> 디렉토리를 서버에 반영하고 컨테이너를 갱신한다
+#   --dev  개발 환경(v1-dev, stag-* SSH 호스트)에 배포
+#   이미지 태그는 --env 사용 시에도 서버 값을 유지
+# 레포의 v1/<대상> 또는 v1-dev/<대상> 디렉토리를 서버에 반영하고 컨테이너를 갱신한다
 # - main: origin/main과 일치할 때만 배포 (정식 배포)
 # - 그 외 브랜치: 경고 후 배포 허용 (테스트 배포)
 set -euo pipefail
@@ -31,11 +33,13 @@ case "$TARGET" in
 esac
 REMOTE_DIR=meety   # 서버 홈 기준 경로
 
+DEPLOY_ENV=prod    # 기본값: 운영 환경
 ENV_SYNC=false     # --env: 로컬 .env를 서버에 반영
 for opt in "${@:2}"; do
   case "$opt" in
     --env) ENV_SYNC=true ;;
-    *)     fail "알 수 없는 옵션: $opt (사용 가능: --env)" ;;
+    --dev) DEPLOY_ENV=dev ;;
+    *)     fail "알 수 없는 옵션: $opt (사용 가능: --dev, --env)" ;;
   esac
 done
 
@@ -46,6 +50,10 @@ done
 # 레포 루트에서 실행되도록 이동 (어느 위치에서 실행해도 동작)
 cd "$(git rev-parse --show-toplevel)"
 SRC_DIR=v1/$TARGET
+if [ "$DEPLOY_ENV" = "dev" ]; then
+  SRC_DIR=v1-dev/$TARGET
+  HOST=stag-$HOST
+fi
 [ -d "$SRC_DIR" ] || fail "디렉토리 없음: $SRC_DIR"
 
 # ---------- 공통 함수 ----------
@@ -55,6 +63,11 @@ remote() { LC_ALL=C.UTF-8 ssh "$HOST" "$@"; }
 # 서버에서 스크립트(stdin)를 인자와 함께 실행
 # ssh는 인자를 공백으로 이어 붙여 서버 셸이 다시 해석하므로, 값마다 따옴표 처리해서 전달
 remote_script() { remote "bash -s -- $(printf '%q ' "$@")"; }
+
+# CI/CD가 관리하는 이미지 태그는 로컬 동기화와 변경 비교에서 제외한다.
+without_image_tags() { sed -E '/^[[:space:]]*(export[[:space:]]+)?(FE_IMAGE_TAG|BE_IMAGE_TAG|AI_IMAGE_TAG)[[:space:]]*=/d' "$@"; }
+
+without_image_tags_keys() { sed -E '/^(FE_IMAGE_TAG|BE_IMAGE_TAG|AI_IMAGE_TAG)$/d'; }
 
 # .env 형식 파일에서 키 이름만 추출
 keys() { grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$1" | tr -d '=' | sort -u; }
@@ -75,8 +88,8 @@ env_diff() {
     $1 == "S" { srv[$2] = $3; next }
               { loc[$2] = $3 }
     END {
-      for (k in loc) { if (!(k in srv)) print "추가  " k; else if (srv[k] != loc[k]) print "변경  " k }
-      for (k in srv) if (!(k in loc)) print "삭제  " k
+      for (k in loc) { if (k ~ /^(FE_IMAGE_TAG|BE_IMAGE_TAG|AI_IMAGE_TAG)$/) continue; if (!(k in srv)) print "추가  " k; else if (srv[k] != loc[k]) print "변경  " k }
+      for (k in srv) if (k !~ /^(FE_IMAGE_TAG|BE_IMAGE_TAG|AI_IMAGE_TAG)$/ && !(k in loc)) print "삭제  " k
     }' | sort
 }
 
@@ -102,7 +115,8 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD)
 SHA=$(git rev-parse --short HEAD)
 git fetch origin --quiet   # 원격 정보 갱신 (main 비교, push 여부 확인용)
 
-info "대상    $TARGET ($HOST)"
+info "대상    $TARGET ($HOST), 환경: $DEPLOY_ENV"
+info "이미지 태그는 서버 .env 값을 유지"
 info "브랜치  $BRANCH @ $SHA"
 
 if [ "$BRANCH" = "main" ]; then
@@ -119,7 +133,7 @@ fi
 if $ENV_SYNC; then
   [ -f "$SRC_DIR/.env" ] || fail "로컬 $SRC_DIR/.env 가 없습니다"
   if [ -f "$SRC_DIR/.env.example" ]; then
-    missing=$(comm -13 <(keys "$SRC_DIR/.env") <(keys "$SRC_DIR/.env.example"))
+    missing=$(comm -13 <(keys "$SRC_DIR/.env") <(keys "$SRC_DIR/.env.example" | without_image_tags_keys))
     [ -z "$missing" ] || fail "로컬 .env에 없는 키: $(echo "$missing" | tr '\n' ' ')"
   fi
   info "환경변수 로컬 .env를 서버에 반영 (--env)"
@@ -183,7 +197,7 @@ ENV_NOTE=""
 if $ENV_CHANGED; then ENV_NOTE="+ .env "; fi
 
 echo
-read -rp "${BOLD}[$TARGET] $BRANCH @ $SHA ${ENV_NOTE}적용할까요? (y/N)${RESET} " answer
+read -rp "${BOLD}[$DEPLOY_ENV/$TARGET] $BRANCH @ $SHA ${ENV_NOTE}적용할까요? (y/N)${RESET} " answer
 [ "$answer" = "y" ] || { echo "취소됨"; exit 1; }
 SECONDS=0   # 확인 대기 시간을 빼고 실제 배포 시간만 측정
 
@@ -204,9 +218,32 @@ if [ -f .env ]; then
   chmod 600 "$2"
 fi
 EOF
-  LC_ALL=C.UTF-8 rsync -t "$SRC_DIR/.env" "$HOST:$REMOTE_DIR/.env" \
-    || fail ".env 전송 실패"
-  remote "chmod 600 $REMOTE_DIR/.env"
+  # 임시 파일로 전송한 후 현재 서버 .env의 태그를 합쳐 원자적으로 교체한다.
+  # 전송 도중 실패해도 기존 .env는 유지하며, 로컬 태그 값은 서버로 보내지 않는다.
+  ENV_UPLOAD=$(remote_script "$REMOTE_DIR" <<'EOF'
+set -e
+cd "$1"
+umask 077
+mktemp .env.upload.XXXXXXXX
+EOF
+  ) || fail ".env 임시 파일 생성 실패"
+  without_image_tags "$SRC_DIR/.env" | LC_ALL=C.UTF-8 ssh "$HOST" "cat > $(printf '%q' "$REMOTE_DIR/$ENV_UPLOAD")" \
+    || fail ".env 전송 실패 (기존 .env 유지)"
+  remote_script "$REMOTE_DIR" "$ENV_UPLOAD" <<'EOF' || fail ".env 병합 실패 (서버 상태 확인 필요)"
+set -euo pipefail
+cd "$1"
+upload=$2
+merged=$(mktemp .env.merge.XXXXXXXX)
+trap 'rm -f "$upload" "$merged"' EXIT
+chmod 600 "$merged"
+cat "$upload" > "$merged"
+# 로컬 파일 끝에 개행이 없어도 보존할 태그와 같은 줄로 합쳐지지 않게 한다.
+printf '\n' >> "$merged"
+if [ -f .env ]; then
+  sed -nE '/^[[:space:]]*(export[[:space:]]+)?(FE_IMAGE_TAG|BE_IMAGE_TAG|AI_IMAGE_TAG)[[:space:]]*=/p' .env >> "$merged"
+fi
+mv "$merged" .env
+EOF
   if [ -n "$SERVER_FP" ]; then
     ok ".env 반영 완료 (기존 파일 백업: ~/$REMOTE_DIR/$BAK)"
   else
@@ -242,6 +279,17 @@ if [ $# -gt 0 ]; then
   fi
   echo "  ${G}.env 키 확인 통과${R}"
 fi
+
+# CI/CD 태그가 없는 서버는 로컬 태그로 초기화하지 않고 명시적으로 중단한다.
+case "$TARGET" in
+  app) tag_keys="FE_IMAGE_TAG BE_IMAGE_TAG" ;;
+  ai) tag_keys="AI_IMAGE_TAG" ;;
+  data) tag_keys="" ;;
+esac
+for key in $tag_keys; do
+  [ -f .env ] && grep -qE "^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=[[:space:]]*[^[:space:]]+" .env \
+    || { echo "  서버 .env에 이미지 태그가 없습니다: $key (CI/CD 배포 후 실행하세요)"; exit 1; }
+done
 
 # 2) compose 문법 검증 (미설정 변수 경고는 그대로 출력됨)
 docker compose config -q
@@ -288,4 +336,4 @@ echo "$(date -Is) $SHA $BRANCH" >> ~/deploy-history.log
 EOF
 
 echo
-echo "${GREEN}${BOLD}완료${RESET}  $TARGET @ $BRANCH $SHA (${SECONDS}초)"
+echo "${GREEN}${BOLD}완료${RESET}  $DEPLOY_ENV/$TARGET @ $BRANCH $SHA (${SECONDS}초)"

@@ -1,0 +1,112 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+networks:
+  web_net:
+    driver: bridge
+  internal_net:
+    driver: bridge
+
+services:
+  nginx:
+    image: nginx:1.29.1-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/logs:/var/log/nginx
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/acme-challenge:/var/www/certbot:ro # Certbot webroot 검증 파일 제공
+      - /etc/letsencrypt:/etc/letsencrypt:ro         # 인증서와 심볼릭 링크 대상
+      - /etc/nginx/ssl:/etc/nginx/ssl:ro             # 기존 설정이 이 경로를 사용할 때만 유지
+    networks:
+      - web_net
+      - internal_net
+    # depends_on은 이번 테스트에서만 무시 (--no-deps), 파일 자체는 수정하지 않음
+
+  frontend:
+    image: "${FRONTEND_IMAGE}:${FE_IMAGE_TAG}"
+    pull_policy: always
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      API_BASE_URL: "${API_BASE_URL}"
+      NEXT_PUBLIC_KAKAO_REST_API_KEY: "${NEXT_PUBLIC_KAKAO_REST_API_KEY}"
+      NEXT_PUBLIC_KAKAO_REDIRECT_URI: "${NEXT_PUBLIC_KAKAO_REDIRECT_URI}"
+      NEXT_PUBLIC_API_BASE_URL: "${NEXT_PUBLIC_API_BASE_URL}"
+      NEXT_PUBLIC_GA_ID: "${NEXT_PUBLIC_GA_ID}"
+      AUTH_COOKIE_DOMAIN: "${AUTH_COOKIE_DOMAIN}"
+      BUG_REPORT_DISCORD_WEBHOOK_URL: "${BUG_REPORT_DISCORD_WEBHOOK_URL}"
+      TZ: Asia/Seoul
+      # HOSTNAME: "0.0.0.0"
+    networks:
+      - web_net
+    healthcheck:
+      # /health가 200만 반환하면 되는 단순 엔드포인트이므로 wget --spider로 충분
+      # --spider는 응답 바디를 저장하지 않고 상태 코드만 확인 (200 외엔 non-zero exit → unhealthy)
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s   # Next.js 로그상 "Ready in 0ms"로 기동이 매우 빠르므로, backend의 40s보다 짧게 잡아도 충분
+    logging: *default-logging
+
+  backend:
+    image: "${BACKEND_IMAGE}:${BE_IMAGE_TAG}"
+    pull_policy: always
+    restart: unless-stopped
+    expose:
+      - "8080"
+    volumes:
+      - ./backend/logs:/app/logs
+    environment:
+      SPRING_PROFILES_ACTIVE: staging
+      # 스테이징 정책
+      MEETING_DAILY_CREATE_LIMIT: "${MEETING_DAILY_CREATE_LIMIT}"
+      CREDIT_MAX_BALANCE: "${CREDIT_MAX_BALANCE}"
+      CREDIT_TEAM_CREATE_GRANT: "${CREDIT_TEAM_CREATE_GRANT}"
+      CREDIT_WEEKLY_GRANT: "${CREDIT_WEEKLY_GRANT}"
+      CREDIT_WEEKLY_GRANT_CRON: "${CREDIT_WEEKLY_GRANT_CRON}"
+      CREDIT_RECORDING_COST: "${CREDIT_RECORDING_COST}"
+      CREDIT_SUMMARY_REGENERATE_COST: "${CREDIT_SUMMARY_REGENERATE_COST}"
+      CREDIT_AI_CHAT_MESSAGE_COST: "${CREDIT_AI_CHAT_MESSAGE_COST}"
+      CREDIT_ANALYSIS_REPORT_COST: "${CREDIT_ANALYSIS_REPORT_COST}"
+      SERVER_PORT: "8080"
+      # DB·Redis가 EC2-micro로 분리되어 서비스명(db/redis) DNS 대신
+      # DATA_TIER_HOST(EC2-micro 사설 IP)로 통일해서 가리킴
+      SPRING_DATASOURCE_URL: "jdbc:mysql://${DATA_TIER_HOST}:3306/${DB_NAME}"
+      SPRING_DATASOURCE_USERNAME: "${DB_USER}"
+      SPRING_DATASOURCE_PASSWORD: "${DB_PASSWORD}"
+      KAKAO_CLIENT_ID: "${KAKAO_CLIENT_ID}"
+      KAKAO_CLIENT_SECRET: "${KAKAO_CLIENT_SECRET}"
+      KAKAO_REDIRECT_URI: "${KAKAO_REDIRECT_URI}"
+      KAKAO_ADMIN_KEY: "${KAKAO_ADMIN_KEY}"
+      JWT_SECRET: "${JWT_SECRET}"
+      JAVA_TOOL_OPTIONS: "${JAVA_TOOL_OPTIONS:--Xmx1024m -Xms512m}"
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS}"
+      AI_WEBSOCKET_URL: "${AI_WEBSOCKET_URL}"
+      AI_HTTP_URL: "${AI_HTTP_URL}"
+      AWS_S3_BUCKET: "${AWS_S3_BUCKET}"
+      AWS_S3_REGION: "${AWS_S3_REGION}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      TZ: Asia/Seoul
+      LOGGING_FILE_NAME: /app/logs/backend.log
+
+      SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "-1"   # DB 다운 상태에서도 앱 기동은 성공하도록
+      SPRING_JPA_DATABASE_PLATFORM: "org.hibernate.dialect.MySQLDialect"  # 부팅시 DB 프로브 커넥션 생략
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8080' || exit 1"]
+      interval: 15s      # 15초마다 체크
+      timeout: 5s        # 5초 내 응답 없으면 실패로 간주
+      retries: 3         # 3번 연속 실패해야 unhealthy로 판정
+      start_period: 40s  # 컨테이너 시작 후 40초는 유예기간 (Spring Boot 부팅 시간 감안, unhealthy로 안 잡음)
+    networks:
+      - web_net
+      - internal_net

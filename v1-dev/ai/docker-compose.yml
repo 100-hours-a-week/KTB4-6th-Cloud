@@ -1,0 +1,40 @@
+services:
+  ai-live:
+    image: "${AI_IMAGE}:${AI_IMAGE_TAG}"
+    container_name: meety-ai-live
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      MEETY_ENVIRONMENT: production
+      MEETY_LOG_LEVEL: ${MEETY_LOG_LEVEL:-INFO}
+      SPEECHMATICS_API_KEY: ${SPEECHMATICS_API_KEY}
+    healthcheck:
+      # curl/wget이 없는 이미지이므로 python 표준 라이브러리로 대체
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    command: ["uvicorn", "meety_ai.live:create_live_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+
+  ai-analysis:
+    image: "${AI_IMAGE}:${AI_IMAGE_TAG}"
+    container_name: meety-ai-analysis
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      MEETY_ENVIRONMENT: production
+      MEETY_LOG_LEVEL: ${MEETY_LOG_LEVEL:-INFO}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      MODAL_TOKEN_ID: ${MODAL_TOKEN_ID}
+      MODAL_TOKEN_SECRET: ${MODAL_TOKEN_SECRET}
+    healthcheck:
+      # curl/wget이 없는 이미지이므로 python 표준 라이브러리로 대체
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    command: ["uvicorn", "meety_ai.analysis:create_analysis_app", "--factory", "--host", "0.0.0.0", "--port", "8001"]

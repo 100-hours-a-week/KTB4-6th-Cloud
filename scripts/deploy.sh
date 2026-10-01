@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# 사용법: ./scripts/deploy.sh <app|data|ai> [--dev] [--env]
+# 사용법: ./scripts/deploy.sh <app|data|ai> [--dev] [--env] [--diff]
 #   --env  로컬 .env도 서버에 반영 (키만 비교해서 표시, 기존 .env는 백업)
+#   --diff 서버 파일과 로컬 파일의 내용 차이 표시 (.env·비밀 파일 제외)
 
 #   --dev  개발 환경(v1-dev, stag-* SSH 호스트)에 배포
 #   이미지 태그는 --env 사용 시에도 서버 값을 유지
@@ -36,11 +37,13 @@ REMOTE_DIR=meety   # 서버 홈 기준 경로
 
 DEPLOY_ENV=prod    # 기본값: 운영 환경
 ENV_SYNC=false     # --env: 로컬 .env를 서버에 반영
+SHOW_DIFF=false    # --diff: 적용 전에 실제 서버 파일과 내용 비교
 for opt in "${@:2}"; do
   case "$opt" in
     --env) ENV_SYNC=true ;;
     --dev) DEPLOY_ENV=dev ;;
-    *)     fail "알 수 없는 옵션: $opt (사용 가능: --dev, --env)" ;;
+    --diff) SHOW_DIFF=true ;;
+    *)     fail "알 수 없는 옵션: $opt (사용 가능: --dev, --env, --diff)" ;;
   esac
 done
 
@@ -103,6 +106,63 @@ tracked_files() { git -C "$SRC_DIR" ls-files -z -- . ':(exclude)*.env.example'; 
 rsync_files() {
   tracked_files \
     | LC_ALL=C.UTF-8 rsync -lptc --from0 --files-from=- "$@" "$SRC_DIR/" "$HOST:$REMOTE_DIR/"
+}
+
+# 서버에서 읽은 파일은 비공개 임시 디렉터리에 저장하고 종료 시 삭제한다.
+DIFF_TMP_DIR=""
+trap '[ -z "$DIFF_TMP_DIR" ] || rm -rf -- "$DIFF_TMP_DIR"' EXIT
+
+show_file_diffs() {
+  local entry file result
+  DIFF_TMP_DIR=$(mktemp -d) || fail "diff 임시 디렉터리 생성 실패"
+
+  # rsync 미리보기에서 전송 대상으로 표시된 파일만 비교한다.
+  while IFS= read -r entry; do
+    [[ "$entry" == \<* ]] || continue
+    file=${entry#* }
+    echo
+    info "내용 비교: $file (- 서버 / + 로컬)"
+
+    # 환경변수 값·인증서·키는 본문으로 출력하지 않는다.
+    case "/$file" in
+      */.env|*/.env.*|*.pem|*.key|*.crt|*/ssl/*)
+        info "  비밀 파일: 내용 비교 생략"
+        continue ;;
+    esac
+    if [ -L "$SRC_DIR/$file" ] || [ ! -f "$SRC_DIR/$file" ]; then
+      info "  일반 파일이 아니므로 내용 비교 생략"
+      continue
+    fi
+
+    # 심볼릭 링크는 따라가지 않고, 없는 서버 파일은 빈 파일과 비교한다.
+    if remote_script "$REMOTE_DIR" "$file" > "$DIFF_TMP_DIR/server" <<'EOF'
+set -euo pipefail
+cd "$1"
+file=$2
+[ ! -L "$file" ] || exit 45
+[ -e "$file" ] || exit 44
+[ -f "$file" ] || exit 45
+cat -- "$file"
+EOF
+    then
+      :
+    else
+      result=$?
+      case "$result" in
+        44) info "  서버에 없는 신규 파일" ;;
+        45) info "  서버 파일이 일반 파일이 아니므로 내용 비교 생략"; continue ;;
+        *) fail "서버 파일 읽기 실패: $file (diff 미완료로 배포 중단)" ;;
+      esac
+    fi
+
+    # diff의 1은 정상적인 내용 차이이며, 2 이상은 비교 실패다.
+    if diff -u -L "server/$file" -L "local/$file" "$DIFF_TMP_DIR/server" "$SRC_DIR/$file"; then
+      info "  내용 차이 없음 (빈 신규 파일 또는 권한 등 속성 변경)"
+    else
+      result=$?
+      [ "$result" -eq 1 ] || fail "파일 비교 실패: $file"
+    fi
+  done <<< "$PREVIEW"
 }
 
 # ---------- 1. 사전 확인 ----------
@@ -170,6 +230,11 @@ if [ -z "$CHANGED" ]; then
 else
   printf '%s\n' "$CHANGED" | sed 's/^/  /'
   COUNT=$(printf '%s\n' "$CHANGED" | wc -l | tr -d ' ')
+fi
+
+# 비교 결과를 확인한 뒤에만 기존 적용 확인·파일 전송으로 진행한다.
+if $SHOW_DIFF && [ "$COUNT" -gt 0 ]; then
+  show_file_diffs
 fi
 
 # --env: 값은 해시로만 비교해서 키 단위 변경만 표시

@@ -3,9 +3,9 @@
 #   --env  로컬 .env도 서버에 반영 (키만 비교해서 표시, 기존 .env는 백업)
 #   --diff 서버 파일과 로컬 파일의 내용 차이 표시 (.env·비밀 파일 제외)
 
-#   --dev  개발 환경(dev-v1, dev-* SSH 호스트)에 배포
+#   --dev  개발 환경(v1/dev, dev-* SSH 호스트)에 배포
 #   이미지 태그는 --env 사용 시에도 서버 값을 유지
-# 레포의 v1/<대상> 또는 dev-v1/<대상> 디렉토리를 서버에 반영하고 컨테이너를 갱신한다
+# 레포의 v1/prod/<대상> 또는 v1/dev/<대상> 디렉토리를 서버에 반영하고 컨테이너를 갱신한다
 # - main: origin/main과 일치할 때만 배포 (정식 배포)
 # - 그 외 브랜치: 경고 후 배포 허용 (테스트 배포)
 set -euo pipefail
@@ -53,9 +53,9 @@ done
 
 # 레포 루트에서 실행되도록 이동 (어느 위치에서 실행해도 동작)
 cd "$(git rev-parse --show-toplevel)"
-SRC_DIR=v1/$TARGET
+SRC_DIR=v1/prod/$TARGET
 if [ "$DEPLOY_ENV" = "dev" ]; then
-  SRC_DIR=dev-v1/$TARGET
+  SRC_DIR=v1/dev/$TARGET
   HOST=dev-$HOST
 fi
 [ -d "$SRC_DIR" ] || fail "디렉토리 없음: $SRC_DIR"

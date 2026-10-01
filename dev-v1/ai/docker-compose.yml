@@ -9,6 +9,7 @@ services:
       MEETY_ENVIRONMENT: production
       MEETY_LOG_LEVEL: ${MEETY_LOG_LEVEL:-INFO}
       SPEECHMATICS_API_KEY: ${SPEECHMATICS_API_KEY}
+      MEETY_SENTRY_DSN: "${MEETY_SENTRY_DSN}"
     healthcheck:
       # curl/wget이 없는 이미지이므로 python 표준 라이브러리로 대체
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
@@ -34,6 +35,7 @@ services:
       LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
       LANGSMITH_PROJECT: ${LANGSMITH_PROJECT}
       LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT}
+      MEETY_SENTRY_DSN: "${MEETY_SENTRY_DSN}"
     healthcheck:
       # curl/wget이 없는 이미지이므로 python 표준 라이브러리로 대체
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]

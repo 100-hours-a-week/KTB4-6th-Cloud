@@ -1,6 +1,6 @@
 services:
   ai-live:
-    image: "${AI_IMAGE}:${AI_IMAGE_TAG}"
+    image: "devkyulim/meety-ai:${AI_IMAGE_TAG}"
     container_name: meety-ai-live
     restart: unless-stopped
     ports:
@@ -20,7 +20,7 @@ services:
     command: ["uvicorn", "meety_ai.live:create_live_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
 
   ai-analysis:
-    image: "${AI_IMAGE}:${AI_IMAGE_TAG}"
+    image: "devkyulim/meety-ai:${AI_IMAGE_TAG}"
     container_name: meety-ai-analysis
     restart: unless-stopped
     ports:
@@ -31,7 +31,8 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       MODAL_TOKEN_ID: ${MODAL_TOKEN_ID}
       MODAL_TOKEN_SECRET: ${MODAL_TOKEN_SECRET}
-      LANGSMITH_TRACING: ${LANGSMITH_TRACING}
+      # 추적 활성화 여부는 서비스 배포 설정으로 관리한다.
+      LANGSMITH_TRACING: "true"
       LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
       LANGSMITH_PROJECT: ${LANGSMITH_PROJECT}
       LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT}

@@ -29,7 +29,8 @@ services:
     # depends_on은 이번 테스트에서만 무시 (--no-deps), 파일 자체는 수정하지 않음
 
   frontend:
-    image: "${FRONTEND_IMAGE}:${FE_IMAGE_TAG}"
+    # NEXT_PUBLIC_* 설정은 FE 이미지 빌드 시 GitHub Actions에서 주입한다.
+    image: "devkyulim/meety-fe:${FE_IMAGE_TAG}"
     pull_policy: always
     restart: unless-stopped
     expose:
@@ -37,15 +38,9 @@ services:
     environment:
       NODE_ENV: production
       API_BASE_URL: "${API_BASE_URL}"
-      NEXT_PUBLIC_KAKAO_REST_API_KEY: "${NEXT_PUBLIC_KAKAO_REST_API_KEY}"
-      NEXT_PUBLIC_KAKAO_REDIRECT_URI: "${NEXT_PUBLIC_KAKAO_REDIRECT_URI}"
-      NEXT_PUBLIC_API_BASE_URL: "${NEXT_PUBLIC_API_BASE_URL}"
-      NEXT_PUBLIC_GA_ID: "${NEXT_PUBLIC_GA_ID}"
       AUTH_COOKIE_DOMAIN: "${AUTH_COOKIE_DOMAIN}"
       BUG_REPORT_DISCORD_WEBHOOK_URL: "${BUG_REPORT_DISCORD_WEBHOOK_URL}"
-      FE_SENTRY_TRACES_SAMPLE_RATE: "${FE_SENTRY_TRACES_SAMPLE_RATE}"
       TZ: Asia/Seoul
-      # HOSTNAME: "0.0.0.0"o
     networks:
       - web_net
     healthcheck:
@@ -59,7 +54,7 @@ services:
     logging: *default-logging
 
   backend:
-    image: "${BACKEND_IMAGE}:${BE_IMAGE_TAG}"
+    image: "devkyulim/meety-be:${BE_IMAGE_TAG}"
     pull_policy: always
     restart: unless-stopped
     expose:
@@ -68,18 +63,16 @@ services:
       - ./backend/logs:/app/logs
     environment:
       SPRING_PROFILES_ACTIVE: staging
-      # 스테이징 정책
-      MEETING_DAILY_CREATE_LIMIT: "${MEETING_DAILY_CREATE_LIMIT}"
-      CREDIT_MAX_BALANCE: "${CREDIT_MAX_BALANCE}"
-      CREDIT_TEAM_CREATE_GRANT: "${CREDIT_TEAM_CREATE_GRANT}"
-      CREDIT_WEEKLY_GRANT: "${CREDIT_WEEKLY_GRANT}"
-      CREDIT_WEEKLY_GRANT_CRON: "${CREDIT_WEEKLY_GRANT_CRON}"
-      CREDIT_RECORDING_COST: "${CREDIT_RECORDING_COST}"
-      CREDIT_SUMMARY_REGENERATE_COST: "${CREDIT_SUMMARY_REGENERATE_COST}"
-      CREDIT_AI_CHAT_MESSAGE_COST: "${CREDIT_AI_CHAT_MESSAGE_COST}"
-      CREDIT_ANALYSIS_REPORT_COST: "${CREDIT_ANALYSIS_REPORT_COST}"
-      SENTRY_PROJECT: "${SENTRY_PROJECT}"
-      SENTRY_TRACES_SAMPLE_RATE: "${BE_SENTRY_TRACES_SAMPLE_RATE:-0.0}"
+      # 스테이징 정책은 배포 설정으로 고정하여 Parameter Store 대상에서 제외한다.
+      MEETING_DAILY_CREATE_LIMIT: "100"
+      CREDIT_MAX_BALANCE: "1000"
+      CREDIT_TEAM_CREATE_GRANT: "200"
+      CREDIT_WEEKLY_GRANT: "200"
+      CREDIT_WEEKLY_GRANT_CRON: "0 0 0 * * MON"
+      CREDIT_RECORDING_COST: "0"
+      CREDIT_SUMMARY_REGENERATE_COST: "0"
+      CREDIT_AI_CHAT_MESSAGE_COST: "0"
+      CREDIT_ANALYSIS_REPORT_COST: "0"
       SERVER_PORT: "8080"
       # DB·Redis가 EC2-micro로 분리되어 서비스명(db/redis) DNS 대신
       # DATA_TIER_HOST(EC2-micro 사설 IP)로 통일해서 가리킴
@@ -102,15 +95,15 @@ services:
       TZ: Asia/Seoul
       LOGGING_FILE_NAME: /app/logs/backend.log
       SENTRY_DSN:  "${SENTRY_DSN}"
-      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT}"
-      BE_SENTRY_LOGS_ENABLED: "${BE_SENTRY_LOGS_ENABLED:-false}"
-      SENTRY_PROFILE_SESSION_SAMPLE_RATE: "${SENTRY_PROFILE_SESSION_SAMPLE_RATE}"
-      SENTRY_PROFILE_LIFECYCLE: "${SENTRY_PROFILE_LIFECYCLE}"
-      SENTRY_SEND_DEFAULT_PII: "${SENTRY_SEND_DEFAULT_PII}"
+      SENTRY_ENVIRONMENT: "staging"
+      BE_SENTRY_LOGS_ENABLED: "true"
+      SENTRY_PROFILE_SESSION_SAMPLE_RATE: "1.0"
+      SENTRY_PROFILE_LIFECYCLE: "TRACE"
+      SENTRY_SEND_DEFAULT_PII: "true"
 
       SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "-1"   # DB 다운 상태에서도 앱 기동은 성공하도록
       SPRING_JPA_DATABASE_PLATFORM: "org.hibernate.dialect.MySQLDialect"  # 부팅시 DB 프로브 커넥션 생략
-      BE_SENTRY_TRACES_SAMPLE_RATE: "${BE_SENTRY_TRACES_SAMPLE_RATE:-0.0}"
+      BE_SENTRY_TRACES_SAMPLE_RATE: "1.0"
       OTEL_LOGS_EXPORTER: "none"
       OTEL_METRICS_EXPORTER: "none"
       OTEL_TRACES_EXPORTER: "none"

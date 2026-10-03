@@ -61,8 +61,6 @@ services:
     restart: unless-stopped
     expose:
       - "8080"
-    volumes:
-      - ./backend/logs:/app/logs
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SERVER_PORT: "8080"
@@ -85,7 +83,6 @@ services:
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
       TZ: Asia/Seoul
-      LOGGING_FILE_NAME: /app/logs/backend.log
 
       SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "-1"   # DB 다운 상태에서도 앱 기동은 성공하도록
       SPRING_JPA_DATABASE_PLATFORM: "org.hibernate.dialect.MySQLDialect"  # 부팅시 DB 프로브 커넥션 생략

@@ -62,20 +62,18 @@ services:
     restart: unless-stopped
     expose:
       - "8080"
-    volumes:
-      - ./backend/logs:/app/logs
     environment:
       SPRING_PROFILES_ACTIVE: staging
       # 스테이징 정책은 배포 설정으로 고정하여 Parameter Store 대상에서 제외한다.
       MEETING_DAILY_CREATE_LIMIT: "100"
-      CREDIT_MAX_BALANCE: "1000"
-      CREDIT_TEAM_CREATE_GRANT: "200"
-      CREDIT_WEEKLY_GRANT: "200"
-      CREDIT_WEEKLY_GRANT_CRON: "0 0 0 * * MON"
-      CREDIT_RECORDING_COST: "0"
-      CREDIT_SUMMARY_REGENERATE_COST: "0"
-      CREDIT_AI_CHAT_MESSAGE_COST: "0"
-      CREDIT_ANALYSIS_REPORT_COST: "0"
+      CREDIT_MAX_BALANCE: "1000"                  # 팀 크레딧 잔액 상한
+      CREDIT_TEAM_CREATE_GRANT: "200"             # 팀 생성 시 최초 지급량
+      CREDIT_WEEKLY_GRANT: "200"                  # 주간 정기 지급량
+      CREDIT_WEEKLY_GRANT_CRON: "0 0 0 * * MON"   # 매주 월요일 00:00(KST)에 지급
+      CREDIT_RECORDING_COST: "0"                  # 녹음 시작 시 차감량
+      CREDIT_SUMMARY_REGENERATE_COST: "0"         # 요약 재생성 시 차감량
+      CREDIT_AI_CHAT_MESSAGE_COST: "0"            # AI 채팅 메시지 1회 비용 정책값(현재 차감 로직 미연결)
+      CREDIT_ANALYSIS_REPORT_COST: "0"            # 분석 리포트 1회 비용 정책값(현재 차감 로직 미연결)
       SERVER_PORT: "8080"
       # DB·Redis가 EC2-micro로 분리되어 서비스명(db/redis) DNS 대신
       # DATA_TIER_HOST(EC2-micro 사설 IP)로 통일해서 가리킴
@@ -96,7 +94,6 @@ services:
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
       TZ: Asia/Seoul
-      LOGGING_FILE_NAME: /app/logs/backend.log
       SENTRY_DSN:  "${SENTRY_DSN}"
       SENTRY_ENVIRONMENT: "staging"
       BE_SENTRY_LOGS_ENABLED: "true"
@@ -119,3 +116,5 @@ services:
     networks:
       - web_net
       - internal_net
+    # CloudWatch Agent가 수집하는 Docker json-file 로그를 유지한다.
+    logging: *default-logging

@@ -12,6 +12,7 @@ networks:
 
 services:
   nginx:
+    container_name: dev-nginx
     image: nginx:1.29.1-alpine
     restart: unless-stopped
     ports:
@@ -29,6 +30,7 @@ services:
     # depends_on은 이번 테스트에서만 무시 (--no-deps), 파일 자체는 수정하지 않음
 
   frontend:
+    container_name: dev-fe
     # NEXT_PUBLIC_* 설정은 FE 이미지 빌드 시 GitHub Actions에서 주입한다.
     image: "devkyulim/meety-fe:${FE_IMAGE_TAG}"
     pull_policy: always
@@ -54,6 +56,7 @@ services:
     logging: *default-logging
 
   backend:
+    container_name: dev-be
     image: "devkyulim/meety-be:${BE_IMAGE_TAG}"
     pull_policy: always
     restart: unless-stopped

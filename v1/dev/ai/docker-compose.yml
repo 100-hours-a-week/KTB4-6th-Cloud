@@ -1,7 +1,8 @@
 services:
   ai-live:
     image: "devkyulim/meety-ai:${AI_IMAGE_TAG}"
-    container_name: meety-ai-live
+    # AI는 live와 analysis가 별도 컨테이너이므로 역할을 이름에 포함한다.
+    container_name: dev-ai-live
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -21,7 +22,7 @@ services:
 
   ai-analysis:
     image: "devkyulim/meety-ai:${AI_IMAGE_TAG}"
-    container_name: meety-ai-analysis
+    container_name: dev-ai-analysis
     restart: unless-stopped
     ports:
       - "8001:8001"

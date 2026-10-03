@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 사용법: ./scripts/deploy.sh <app|data|ai> [--dev] [--env] [--diff]
 #   --env  로컬 .env도 서버에 반영 (키만 비교해서 표시, 기존 .env는 백업)
+#   배포 성공 시 .env 백업 삭제, 실패 시 해당 배포의 백업 1개만 유지
 #   --diff 서버 파일과 로컬 파일의 내용 차이 표시 (.env·비밀 파일 제외)
 
 #   --dev  개발 환경(v1/dev, dev-* SSH 호스트)에 배포
@@ -108,9 +109,46 @@ rsync_files() {
     | LC_ALL=C.UTF-8 rsync -lptc --from0 --files-from=- "$@" "$SRC_DIR/" "$HOST:$REMOTE_DIR/"
 }
 
+# 날짜 형식으로 만든 .env 백업만 정리한다. 실패 시에는 이번 배포의 백업을 보존한다.
+prune_env_backups() {
+  local keep=${1:-}
+  remote_script "$REMOTE_DIR" "$keep" <<'EOF'
+set -euo pipefail
+cd "$1"
+keep=$2
+if [ -n "$keep" ]; then
+  [[ "$keep" =~ ^\.env\.bak-[0-9]{8}-[0-9]{6}(\.[[:alnum:]]{8})?$ ]] || exit 2
+  [ -f "$keep" ] && [ ! -L "$keep" ] || exit 2
+fi
+removed=0
+for file in .env.bak-*; do
+  [ -f "$file" ] && [ ! -L "$file" ] || continue
+  [[ "$file" =~ ^\.env\.bak-[0-9]{8}-[0-9]{6}(\.[[:alnum:]]{8})?$ ]] || continue
+  [ "$file" = "$keep" ] && continue
+  rm -- "$file"
+  removed=$((removed + 1))
+done
+printf '%s\n' "$removed"
+EOF
+}
+
 # 서버에서 읽은 파일은 비공개 임시 디렉터리에 저장하고 종료 시 삭제한다.
 DIFF_TMP_DIR=""
-trap '[ -z "$DIFF_TMP_DIR" ] || rm -rf -- "$DIFF_TMP_DIR"' EXIT
+BAK=""
+on_exit() {
+  local status=$?
+  trap - EXIT
+  [ -z "$DIFF_TMP_DIR" ] || rm -rf -- "$DIFF_TMP_DIR"
+  if [ "$status" -ne 0 ] && [ -n "$BAK" ]; then
+    if PRUNED=$(prune_env_backups "$BAK"); then
+      warn ".env 백업 정리: ${PRUNED}개 삭제, 실패한 배포의 백업 1개 보존 ($BAK)"
+    else
+      warn ".env 백업 정리에 실패했습니다. 서버의 백업 파일을 확인하세요."
+    fi
+  fi
+  exit "$status"
+}
+trap on_exit EXIT
 
 show_file_diffs() {
   local entry file result
@@ -274,16 +312,23 @@ rsync_files -q \
 ok "${COUNT}개 파일 전송 완료"
 
 if $ENV_CHANGED; then
-  # 기존 .env를 백업한 뒤 덮어씀 (백업도 비밀값이 있으므로 권한 600)
-  BAK=".env.bak-$(date +%Y%m%d-%H%M%S)"
-  remote_script "$REMOTE_DIR" "$BAK" <<'EOF' || fail ".env 백업에 실패했습니다. 서버 상태를 확인하세요."
-set -e
+  # 기존 .env를 고유한 이름으로 백업한다. 백업도 비밀값이 있으므로 권한을 600으로 제한한다.
+  BAK=$(remote_script "$REMOTE_DIR" <<'EOF'
+set -euo pipefail
 cd "$1"
 if [ -f .env ]; then
-  cp -p .env "$2"
-  chmod 600 "$2"
+  umask 077
+  backup=$(mktemp ".env.bak-$(date +%Y%m%d-%H%M%S).XXXXXXXX")
+  trap 'rm -f -- "$backup"' EXIT
+  cp -p .env "$backup"
+  chmod 600 "$backup"
+  trap - EXIT
+  printf '%s\n' "$backup"
 fi
 EOF
+  ) || fail ".env 백업에 실패했습니다. 서버 상태를 확인하세요."
+  [[ -z "$BAK" || "$BAK" =~ ^\.env\.bak-[0-9]{8}-[0-9]{6}\.[[:alnum:]]{8}$ ]] \
+    || fail ".env 백업 파일 이름이 예상과 다릅니다. 서버 상태를 확인하세요."
   # 임시 파일로 전송한 후 현재 서버 .env의 태그를 합쳐 원자적으로 교체한다.
   # 전송 도중 실패해도 기존 .env는 유지하며, 로컬 태그 값은 서버로 보내지 않는다.
   ENV_UPLOAD=$(remote_script "$REMOTE_DIR" <<'EOF'
@@ -310,7 +355,7 @@ if [ -f .env ]; then
 fi
 mv "$merged" .env
 EOF
-  if [ -n "$SERVER_FP" ]; then
+  if [ -n "$BAK" ]; then
     ok ".env 반영 완료 (기존 파일 백업: ~/$REMOTE_DIR/$BAK)"
   else
     ok ".env 반영 완료 (서버에 기존 파일 없음)"
@@ -400,6 +445,13 @@ docker compose ps --format 'table {{.Name}}\t{{.Status}}' | sed 's/^/  /'
 # 배포 이력 (시각 커밋 브랜치)
 echo "$(date -Is) $SHA $BRANCH" >> ~/deploy-history.log
 EOF
+
+# 배포가 성공하면 이전 실패에서 남긴 파일까지 포함해 .env 백업을 삭제한다.
+if PRUNED=$(prune_env_backups); then
+  info ".env 백업 정리: ${PRUNED}개 삭제"
+else
+  warn ".env 백업 정리에 실패했습니다. 배포는 완료됐으므로 서버의 백업 파일을 확인하세요."
+fi
 
 echo
 echo "${GREEN}${BOLD}완료${RESET}  $DEPLOY_ENV/$TARGET @ $BRANCH $SHA (${SECONDS}초)"

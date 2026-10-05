@@ -1,4 +1,4 @@
-import { check } from 'k6';
+import { check, sleep } from 'k6';
 import http from 'k6/http';
 import { cookieHeader, fixtureForVu, loadConfig, recordResult, safePath, singleRunOptions } from './common.js';
 
@@ -8,6 +8,16 @@ import { cookieHeader, fixtureForVu, loadConfig, recordResult, safePath, singleR
 const scenario = __ENV.SCENARIO || 'create';
 if (!['create', 'join', 'transcript', 'summary'].includes(scenario)) {
   throw new Error('SCENARIO must be create, join, transcript, or summary');
+}
+const captureMeetingIds = __ENV.CAPTURE_MEETING_IDS === 'YES';
+if (captureMeetingIds && scenario !== 'create') {
+  throw new Error('CAPTURE_MEETING_IDS is only supported for SCENARIO=create');
+}
+// 요청이 너무 빨리 끝나면 k6 Web Dashboard가 "test run was short"로 HTML 보고서를 만들지 않는다.
+// 요청 완료 후 VU를 잠시 유지해 보고서용 지표 구간을 확보한다. 응답 시간 측정에는 포함되지 않는다.
+const holdSeconds = Number(__ENV.REPORT_HOLD_SECONDS || '8');
+if (!Number.isFinite(holdSeconds) || holdSeconds < 0 || holdSeconds > 60) {
+  throw new Error('REPORT_HOLD_SECONDS must be between 0 and 60');
 }
 const config = loadConfig(scenario);
 // k6는 options를 읽어 VU 수와 실행 방식을 정하고, 각 VU에서 run()을 호출한다.
@@ -53,6 +63,7 @@ export function run() {
 
   // 상태 코드만 맞아도 본문이 비어 있거나 실패 응답일 수 있으므로 함께 확인한다.
   let contentOk = false;
+  let createdMeetingId = null;
   if (response && response.status === item.expectedStatus) {
     try {
       const payload = response.json();
@@ -61,13 +72,21 @@ export function run() {
       contentOk = payload.success === true && field !== undefined && field !== null
         && (typeof field !== 'string' || field.trim() !== '')
         && (!Array.isArray(field) || field.length > 0);
+      if (contentOk && scenario === 'create' && Number.isSafeInteger(field) && field > 0) {
+        createdMeetingId = field;
+      }
     } catch (_) {
       contentOk = false;
     }
   }
   const ok = Boolean(response && response.status === item.expectedStatus && contentOk);
+  // 회의 ID만 별도 로그에 남긴다. 토큰이나 응답 전체는 기록하지 않는다.
+  if (ok && captureMeetingIds && createdMeetingId !== null && Number.isSafeInteger(item.teamId)) {
+    console.log(`MEETY_CREATED_MEETING teamId=${item.teamId} meetingId=${createdMeetingId}`);
+  }
   // check는 k6 기본 보고서에 판정 결과를 남기고, recordResult는 프로젝트별 지표를 남긴다.
   // 둘 다 요청을 재시도하거나 시험을 즉시 중단시키지는 않는다.
   check(response, { [`${scenario} expected response`]: () => ok }, { operation: scenario });
   recordResult(scenario, ok, response ? response.status : 0);
+  if (holdSeconds > 0) sleep(holdSeconds);
 }

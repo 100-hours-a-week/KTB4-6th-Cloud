@@ -7,10 +7,13 @@ services:
     ports:
       - "8000:8000"
     environment:
-      MEETY_ENVIRONMENT: production
+      # 가짜 공급자 앱은 production에서 기동을 거부하므로 목업 전환 시 .env에서 바꾼다.
+      MEETY_ENVIRONMENT: "${AI_ENVIRONMENT:-production}"
       MEETY_LOG_LEVEL: ${MEETY_LOG_LEVEL:-INFO}
       SPEECHMATICS_API_KEY: ${SPEECHMATICS_API_KEY}
       MEETY_SENTRY_DSN: "${MEETY_SENTRY_DSN}"
+      # 가짜 STT의 확정 전사 지연(ms). 실제 앱에서는 읽지 않는다.
+      FAKE_STT_LATENCY_MS: "${FAKE_STT_LATENCY_MS:-3000}"
     healthcheck:
       # curl/wget이 없는 이미지이므로 python 표준 라이브러리로 대체
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
@@ -18,7 +21,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    command: ["uvicorn", "meety_ai.live:create_live_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+    # 기본값은 실제 앱. .env의 AI_LIVE_APP으로 가짜 공급자 앱(meety_ai.fake_providers)으로 전환한다.
+    command: ["uvicorn", "${AI_LIVE_APP:-meety_ai.live:create_live_app}", "--factory", "--host", "0.0.0.0", "--port", "8000"]
 
   ai-analysis:
     image: "devkyulim/meety-ai:${AI_IMAGE_TAG}"
@@ -27,7 +31,8 @@ services:
     ports:
       - "8001:8001"
     environment:
-      MEETY_ENVIRONMENT: production
+      # 가짜 공급자 앱은 production에서 기동을 거부하므로 목업 전환 시 .env에서 바꾼다.
+      MEETY_ENVIRONMENT: "${AI_ENVIRONMENT:-production}"
       MEETY_LOG_LEVEL: ${MEETY_LOG_LEVEL:-INFO}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       MODAL_TOKEN_ID: ${MODAL_TOKEN_ID}
@@ -38,6 +43,9 @@ services:
       LANGSMITH_PROJECT: ${LANGSMITH_PROJECT}
       LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT}
       MEETY_SENTRY_DSN: "${MEETY_SENTRY_DSN}"
+      # 가짜 요약·화자 분리 응답 지연(ms). 실제 앱에서는 읽지 않는다.
+      FAKE_SUMMARY_LATENCY_MS: "${FAKE_SUMMARY_LATENCY_MS:-15500}"
+      FAKE_DIARIZATION_LATENCY_MS: "${FAKE_DIARIZATION_LATENCY_MS:-7000}"
     healthcheck:
       # curl/wget이 없는 이미지이므로 python 표준 라이브러리로 대체
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]
@@ -45,4 +53,5 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    command: ["uvicorn", "meety_ai.analysis:create_analysis_app", "--factory", "--host", "0.0.0.0", "--port", "8001"]
+    # 기본값은 실제 앱. .env의 AI_ANALYSIS_APP으로 가짜 공급자 앱(meety_ai.fake_providers)으로 전환한다.
+    command: ["uvicorn", "${AI_ANALYSIS_APP:-meety_ai.analysis:create_analysis_app}", "--factory", "--host", "0.0.0.0", "--port", "8001"]

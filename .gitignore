@@ -23,3 +23,6 @@ v1/load-test/fixtures.teams.credentials.local.json
 v1/load-test/fixtures.local.json
 v1/load-test/audio.local.*
 v1/load-test/reports/
+
+# 부하 발생기 OS에 맞춰 빌드한 SSE 확장 실행 파일
+v1/load-test/k6-sse

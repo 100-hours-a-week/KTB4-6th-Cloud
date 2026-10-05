@@ -1,3 +1,4 @@
+import { audioFrame, prepareAudioStream } from './audio-protocol.js';
 import { check, sleep } from 'k6';
 import { SharedArray } from 'k6/data';
 import { open as openFile } from 'k6/experimental/fs';
@@ -212,7 +213,7 @@ function loginAll(members) {
 
 function sendAudio(team, recordingSessionId, token, audioFile) {
   // audio-ws.js의 audio 모드와 같은 방식으로 파일을 재생 시간에 맞춰 나눠 보낸다.
-  // 핸드셰이크는 BE가 AI 연결 준비(READY)를 기다린 뒤에 완료되므로 101 이후 청크는 AI로 전달된다.
+  // recovery.finished 이후 stream.ready를 받아야 AI 디코더가 준비된 상태다.
   const url = `${baseUrl.replace(/^http/, 'ws')}/ws/v1/recordings/${encodeURIComponent(recordingSessionId)}/audio?audioFormat=${encodeURIComponent(audioFormat)}`;
   // 마지막 청크를 보낸 뒤 BE가 AI로 전달할 시간을 조금 두고 닫는다.
   const holdMs = audioDurationMs + intervalMs + drainMs;
@@ -222,12 +223,17 @@ function sendAudio(team, recordingSessionId, token, audioFile) {
   let socketError = false;
   let sentBytes = 0;
   let nextChunk = 0;
+  let sentChunks = 0;
+  let streamReady = false;
   const response = ws.connect(url, {
     headers: { Cookie: `accessToken=${token}` },
     tags: { name: 'audio_ws', operation: 'ws_audio' },
   }, function (socket) {
     socket.on('open', function () {
       openedAt = Date.now();
+    });
+    prepareAudioStream(socket, function () {
+      streamReady = true;
       socket.setInterval(function () {
         if (nextChunk >= chunkCount) return;
         // 각 바이트가 정확히 한 조각에 들어가도록 파일 전체를 chunkCount개로 나눈다.
@@ -235,7 +241,7 @@ function sendAudio(team, recordingSessionId, token, audioFile) {
         const end = Math.floor((nextChunk + 1) * audioFile.byteLength / chunkCount);
         nextChunk += 1;
         if (end > start) {
-          socket.sendBinary(audioFile.slice(start, end));
+          socket.sendBinary(audioFrame(audioFile.slice(start, end), ++sentChunks));
           sentBytes += end - start;
         }
       }, intervalMs);
@@ -243,14 +249,14 @@ function sendAudio(team, recordingSessionId, token, audioFile) {
         closedByTest = true;
         socket.close();
       }, holdMs);
-    });
+    }, function () { socketError = true; });
     socket.on('close', function () {
       if (!closedByTest) unexpectedClose = true;
     });
     socket.on('error', function () { socketError = true; });
   });
   const ok = Boolean(response && response.status === 101 && openedAt && !unexpectedClose && !socketError
-    && sentBytes === audioFile.byteLength);
+    && streamReady && sentBytes === audioFile.byteLength);
   if (!judge('ws_audio', response, ok)) fail(team, 'ws_audio', response);
   return ok;
 }
@@ -464,7 +470,11 @@ export function receiveEvents(data) {
     const streamOk = Boolean(response && response.status === 200 && connected && started && completedEvent
       && !streamError && received.size >= minimumLiveTranscripts);
     judge('sse', response, streamOk);
-    if (!streamOk) return fail(team, 'sse', response);
+    if (!streamOk) {
+      // 전사 본문이나 토큰 없이 실패한 조건만 기록한다.
+      console.warn(`MEETY_FLOW_SSE_STATE teamId=${team.teamId} member=${item.memberIndex} connected=${connected} started=${started} completed=${completedEvent} error=${streamError} transcripts=${received.size} required=${minimumLiveTranscripts}`);
+      return fail(team, 'sse', response);
+    }
     if (Date.now() - loggedInAt >= RELOGIN_AFTER_MS) {
       const relogin = loginAll([member]);
       if (!relogin.tokens) return fail(team, 'participant_relogin', relogin.failed);

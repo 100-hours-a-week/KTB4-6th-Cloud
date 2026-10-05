@@ -91,8 +91,6 @@ services:
       AI_HTTP_URL: "${AI_HTTP_URL}"
       AWS_S3_BUCKET: "${AWS_S3_BUCKET}"
       AWS_S3_REGION: "${AWS_S3_REGION}"
-      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
-      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
       TZ: Asia/Seoul
       SENTRY_DSN:  "${SENTRY_DSN}"
       SENTRY_ENVIRONMENT: "staging"

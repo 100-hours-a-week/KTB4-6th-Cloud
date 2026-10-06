@@ -14,6 +14,9 @@ services:
       MEETY_SENTRY_DSN: "${MEETY_SENTRY_DSN}"
       # 가짜 STT의 확정 전사 지연(ms). 실제 앱에서는 읽지 않는다.
       FAKE_STT_LATENCY_MS: "${FAKE_STT_LATENCY_MS:-3000}"
+      # 프로세스당 동시 녹음 연결 상한. 넘으면 AI가 429로 거절하고 BE는 503을 돌려준다.
+      # 앱 기본값(20)과 맞추고, 부하테스트 규모에 맞춘 값은 .env에서 지정한다.
+      MEETY_MAX_RECORDING_CONNECTIONS: "${MEETY_MAX_RECORDING_CONNECTIONS:-20}"
     healthcheck:
       # curl/wget이 없는 이미지이므로 python 표준 라이브러리로 대체
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]

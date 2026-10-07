@@ -1,10 +1,5 @@
 # Please review these resources and move them into your main configuration files.
 
-resource "aws_iam_role_policy_attachment" "ec2_cloudwatch_ssm_deploy" {
-  policy_arn = "arn:aws:iam::${local.account_id}:policy/meety-GitHubActions-SSM-Deploy"
-  role       = "meety-ec2-cloudwatch-role"
-}
-
 resource "aws_iam_instance_profile" "ec2_prod" {
   name     = "meety-ec2-prod"
   path     = "/"
@@ -337,16 +332,6 @@ resource "aws_vpc_security_group_ingress_rule" "ai_8000_from_app" {
   region                       = "us-east-2"
   security_group_id            = "sg-0cb07d86ec124f4bc"
   to_port                      = 8000
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_dev_ssm_deploy" {
-  policy_arn = "arn:aws:iam::${local.account_id}:policy/meety-GitHubActions-SSM-Deploy"
-  role       = "meety-ec2-v1-dev"
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_prod_ssm_deploy" {
-  policy_arn = "arn:aws:iam::${local.account_id}:policy/meety-GitHubActions-SSM-Deploy"
-  role       = "meety-ec2-prod"
 }
 
 resource "aws_iam_role_policy_attachment" "ec2_cloudwatch_params_read" {

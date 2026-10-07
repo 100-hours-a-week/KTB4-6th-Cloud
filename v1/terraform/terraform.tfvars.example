@@ -1,0 +1,2 @@
+# terraform.tfvars 로 복사한 뒤 실제 값을 채운다. (terraform.tfvars는 Git에 올리지 않는다)
+ssh_allowed_cidr = "x.x.x.x/32"

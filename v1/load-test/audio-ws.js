@@ -1,3 +1,4 @@
+import { audioFrame, prepareAudioStream } from './audio-protocol.js';
 import { check } from 'k6';
 import ws from 'k6/ws';
 import { cookieHeader, fixtureForVu, loadConfig, recordResult, singleRunOptions } from './common.js';
@@ -61,6 +62,8 @@ export function run() {
   let unexpectedClose = false;
   let sentBytes = 0;
   let nextChunk = 0;
+  let sentChunks = 0;
+  let streamReady = false;
 
   // ws.connect는 연결이 끝날 때까지 이 VU에서 실행된다. 콜백 안에서 이벤트를 등록한다.
   // 반환 response.status=101은 핸드셰이크 성공이며 전사·저장 성공을 의미하지 않는다.
@@ -69,8 +72,11 @@ export function run() {
     tags: { name: 'audio_ws', operation: mode === 'audio' ? 'ws_audio' : 'ws_connect' },
   }, function (socket) {
     socket.on('open', function () {
-      // 핸드셰이크 이후부터 연결 유지 시간을 잰다.
+      // HTTP 연결 시각과 AI 스트림 준비를 구분한다.
       openedAt = Date.now();
+    });
+    prepareAudioStream(socket, function () {
+      streamReady = true;
       if (mode === 'audio') {
         // setInterval은 연결이 열린 동안 반복 호출된다. 정해진 조각 수를 넘으면 송신하지 않는다.
         socket.setInterval(function () {
@@ -81,7 +87,7 @@ export function run() {
           const end = Math.floor((nextChunk + 1) * audioFile.byteLength / chunkCount);
           nextChunk += 1;
           if (end > start) {
-            socket.sendBinary(audioFile.slice(start, end));
+            socket.sendBinary(audioFrame(audioFile.slice(start, end), ++sentChunks));
             sentBytes += end - start;
           }
         }, intervalMs);
@@ -91,7 +97,7 @@ export function run() {
         closedByTest = true;
         socket.close();
       }, holdMs);
-    });
+    }, function () { unexpectedClose = true; });
     socket.on('close', function () {
       if (!closedByTest) unexpectedClose = true;
     });
@@ -103,7 +109,7 @@ export function run() {
   // 계획된 종료인지, 실제 파일 바이트를 전부 보냈는지까지 확인해 송신 측 성공을 판정한다.
   const heldLongEnough = openedAt && Date.now() - openedAt >= holdMs;
   const ok = Boolean(response && response.status === 101 && openedAt && !unexpectedClose && heldLongEnough
-    && (mode !== 'audio' || sentBytes === audioFile.byteLength));
+    && streamReady && (mode !== 'audio' || sentBytes === audioFile.byteLength));
   check(response, { 'audio WebSocket connected and held': () => ok }, { operation: mode });
   recordResult(mode === 'audio' ? 'ws_audio' : 'ws_connect', ok, response ? response.status : 0);
 }

@@ -1,6 +1,0 @@
-# 실제 계정과 토큰을 담은 로컬 fixture 및 오디오 샘플은 저장소에 올리지 않는다.
-fixtures.credentials.local.json
-fixtures.teams.credentials.local.json
-fixtures.local.json
-audio.local.*
-reports/

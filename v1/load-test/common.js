@@ -24,14 +24,8 @@ export const serverErrors = new Counter('meety_http_5xx');
 export const clientErrors = new Counter('meety_http_4xx');
 export const transportErrors = new Counter('meety_transport_errors');
 
-export function loadConfig(scenario) {
-  // __ENV는 셸 환경변수 또는 k6의 -e 옵션으로 전달한 실행 설정이다.
-  // 실제 요청을 보내기 전에 잘못된 수준·대상 주소·실행 허용 여부를 검사한다.
-  const level = __ENV.LEVEL || 'smoke';
-  if (!LEVEL_COUNTS[level] || !LEVEL_COUNTS[level][scenario]) {
-    throw new Error(`Unsupported LEVEL or SCENARIO: ${level}/${scenario}`);
-  }
-
+export function loadBaseUrl() {
+  // 대상 주소와 실행 허용 여부만 검사한다. fixture 형식이 다른 스크립트(meeting-flow.js)도 함께 쓴다.
   const baseUrl = (__ENV.BASE_URL || '').replace(/\/$/, '');
   if (!/^https?:\/\//.test(baseUrl)) {
     throw new Error('BASE_URL must be an explicit http(s) URL');
@@ -43,6 +37,18 @@ export function loadConfig(scenario) {
   if (__ENV.ALLOW_LIVE_TEST !== 'YES') {
     throw new Error('Set ALLOW_LIVE_TEST=YES after checking the target and test window');
   }
+  return baseUrl;
+}
+
+export function loadConfig(scenario) {
+  // __ENV는 셸 환경변수 또는 k6의 -e 옵션으로 전달한 실행 설정이다.
+  // 실제 요청을 보내기 전에 잘못된 수준·대상 주소·실행 허용 여부를 검사한다.
+  const level = __ENV.LEVEL || 'smoke';
+  if (!LEVEL_COUNTS[level] || !LEVEL_COUNTS[level][scenario]) {
+    throw new Error(`Unsupported LEVEL or SCENARIO: ${level}/${scenario}`);
+  }
+
+  const baseUrl = loadBaseUrl();
 
   // SharedArray는 VU마다 JSON 파일을 다시 읽지 않고 초기화 결과를 공유한다.
   // open()은 k6의 파일 읽기 함수이며 VU 실행 전 init 단계에서만 사용할 수 있다.

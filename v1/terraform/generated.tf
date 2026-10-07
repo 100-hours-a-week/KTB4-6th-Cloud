@@ -116,18 +116,16 @@ resource "aws_iam_role" "github_actions_ssm" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-        }
-        StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:100-hours-a-week*/KTB4-6th-FE*:environment:production",
-            "repo:100-hours-a-week*/KTB4-6th-FE*:environment:staging",
-            "repo:100-hours-a-week*/KTB4-6th-FE*:environment:production-migration-approval",
-            "repo:100-hours-a-week*/KTB4-6th-BE*:environment:production",
-            "repo:100-hours-a-week*/KTB4-6th-BE*:environment:staging",
-            "repo:100-hours-a-week*/KTB4-6th-BE*:environment:production-migration-approval",
-            "repo:100-hours-a-week*/KTB4-6th-AI*:environment:production",
-            "repo:100-hours-a-week*/KTB4-6th-AI*:environment:staging",
-            "repo:100-hours-a-week*/KTB4-6th-AI*:environment:production-migration-approval",
+            "repo:100-hours-a-week@167328634/KTB4-6th-FE@1344634298:environment:production",
+            "repo:100-hours-a-week@167328634/KTB4-6th-FE@1344634298:environment:staging",
+            "repo:100-hours-a-week@167328634/KTB4-6th-FE@1344634298:environment:production-migration-approval",
+            "repo:100-hours-a-week@167328634/KTB4-6th-BE@1344634945:environment:production",
+            "repo:100-hours-a-week@167328634/KTB4-6th-BE@1344634945:environment:staging",
+            "repo:100-hours-a-week@167328634/KTB4-6th-BE@1344634945:environment:production-migration-approval",
+            "repo:100-hours-a-week@167328634/KTB4-6th-AI@1344635474:environment:production",
+            "repo:100-hours-a-week@167328634/KTB4-6th-AI@1344635474:environment:staging",
+            "repo:100-hours-a-week@167328634/KTB4-6th-AI@1344635474:environment:production-migration-approval",
           ]
         }
       }

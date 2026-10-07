@@ -670,10 +670,23 @@ resource "aws_iam_role_policy" "github_actions_ssm" {
   name = "SSMPolicy"
   policy = jsonencode({
     Statement = [{
-      Action   = ["ssm:SendCommand", "ssm:GetCommandInvocation"]
+      # FE/BE는 app 서버, AI는 ai 서버에만 배포 명령을 보낸다. data 서버는 제외한다.
+      Action = "ssm:SendCommand"
+      Effect = "Allow"
+      Resource = [
+        aws_instance.prod_app.arn,
+        aws_instance.prod_ai.arn,
+        aws_instance.dev_app.arn,
+        aws_instance.dev_ai.arn,
+        "arn:aws:ssm:us-east-2::document/AWS-RunShellScript",
+      ]
+      Sid = "SendDeployCommand"
+      }, {
+      # GetCommandInvocation은 리소스 단위 권한을 지원하지 않는다.
+      Action   = "ssm:GetCommandInvocation"
       Effect   = "Allow"
-      Resource = ["*"]
-      Sid      = "Statement1"
+      Resource = "*"
+      Sid      = "ReadCommandResult"
     }]
     Version = "2012-10-17"
   })

@@ -6,13 +6,13 @@
 
 | 폴더 | 관리 대상 | state |
 | --- | --- | --- |
-| `shared/` | dev와 prod가 같이 쓰는 리소스: VPC, 서브넷, ALB, ECS 클러스터, ACM 인증서 | `shared/terraform.tfstate` |
-| `dev/` | V2 dev 전용 리소스: ECS 서비스, DB, Parameter Store, 보안 그룹 | `dev/terraform.tfstate` |
-| `prod/` | V2 prod 전용 리소스. 10/15에 `dev/`를 바탕으로 만든다 | `prod/terraform.tfstate` |
+| `shared/` | staging과 prod가 같이 쓰는 리소스: VPC, 서브넷, ALB, ACM 인증서 | `shared/terraform.tfstate` |
+| `staging/` | V2 staging 전용 리소스: ECS 클러스터와 서비스, DB, Parameter Store, 보안 그룹 | `staging/terraform.tfstate` |
+| `prod/` | V2 prod 전용 리소스. 10/15에 `staging/`을 바탕으로 만든다 | `prod/terraform.tfstate` |
 
-폴더마다 state가 따로라서 `dev/`에서 apply해도 `shared/`와 `prod/`는 바뀌지 않는다. 공통 코드는 `prod/`를 만들 때 모듈로 정리한다.
+폴더마다 state가 따로라서 `staging/`에서 apply해도 `shared/`와 `prod/`는 바뀌지 않는다. 공통 코드는 `prod/`를 만들 때 모듈로 정리한다.
 
-**실행 순서:** `shared/` → `dev/` (`dev/`는 `shared/`가 만든 VPC와 ALB를 사용한다)
+**실행 순서:** `shared/` → `staging/` (`staging/`은 `shared/`가 만든 VPC와 ALB를 사용한다)
 
 ## 자격 증명
 
@@ -30,7 +30,7 @@ aws sts get-caller-identity --query Arn --output text
 ## 작업 방법
 
 ```bash
-cd v2/terraform/shared          # 또는 dev
+cd v2/terraform/shared          # 또는 staging
 terraform init                  # 처음 한 번, provider 버전을 바꿨을 때
 terraform fmt -recursive
 terraform validate
@@ -60,5 +60,5 @@ provider의 `default_tags`로 모든 리소스에 아래 태그가 붙는다. `S
 | `Service` | `meety` |
 | `Project` | `meety` |
 | `Version` | `v2` |
-| `Env` | `shared`, `dev`, `prod` |
+| `Env` | `shared`, `staging`, `prod` |
 | `ManagedBy` | `terraform` |

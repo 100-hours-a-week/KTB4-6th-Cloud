@@ -1,9 +1,9 @@
-# dev BE 보안 그룹: ALB 보안 그룹에서 오는 요청만 받는다.
+# staging BE 보안 그룹: ALB 보안 그룹에서 오는 요청만 받는다.
 # 태스크에 public IP가 있지만, 이 규칙 때문에 인터넷에서 태스크로 직접 접근할 수 없다.
 
 resource "aws_security_group" "be" {
   name        = "${local.name_prefix}-be-sg"
-  description = "V2 dev BE: from ALB only"
+  description = "V2 staging BE: from ALB only"
   vpc_id      = local.shared.vpc_id
 
   tags = {

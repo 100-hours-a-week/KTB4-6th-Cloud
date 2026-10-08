@@ -1,4 +1,4 @@
-# 공용 ALB에 dev BE용 대상 그룹과 전달 규칙을 붙인다.
+# 공용 ALB에 staging BE용 대상 그룹과 전달 규칙을 붙인다.
 
 resource "aws_lb_target_group" "be" {
   name        = "${local.name_prefix}-be-tg"
@@ -23,10 +23,10 @@ resource "aws_lb_target_group" "be" {
   }
 }
 
-# v2-api-dev.meety.io.kr 로 온 HTTPS 요청 → dev BE
+# api-staging.meety.io.kr 로 온 HTTPS 요청 → staging BE
 resource "aws_lb_listener_rule" "be" {
   listener_arn = local.shared.https_listener_arn
-  priority     = 100 # dev는 100번대, prod는 200번대를 쓴다
+  priority     = 100 # staging은 100번대, prod는 200번대를 쓴다
 
   condition {
     host_header {

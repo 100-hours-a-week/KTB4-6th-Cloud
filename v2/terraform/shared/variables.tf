@@ -22,8 +22,8 @@ variable "azs" {
   default     = ["ap-northeast-2a", "ap-northeast-2c"]
 }
 
-variable "dev_domains" {
-  description = "V2 dev 인증서에 넣을 도메인. 첫 번째가 대표 이름이다"
+variable "staging_domains" {
+  description = "V2 staging 인증서에 넣을 도메인. 첫 번째가 대표 이름이다 (BE, FE 순서)"
   type        = list(string)
-  default     = ["v2-api-dev.meety.io.kr", "v2-dev.meety.io.kr"]
+  default     = ["api-staging.meety.io.kr", "staging.meety.io.kr"]
 }

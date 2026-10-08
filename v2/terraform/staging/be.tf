@@ -1,4 +1,4 @@
-# dev BE 서비스. 지금은 경로 검증용 nginx를 띄우고, BE 배포 시(10/10) 이미지와 값을 바꾼다.
+# staging BE 서비스. 지금은 경로 검증용 nginx를 띄우고, BE 배포 시(10/10) 이미지와 값을 바꾼다.
 
 resource "aws_cloudwatch_log_group" "be" {
   name              = "/ecs/${local.name_prefix}/be"

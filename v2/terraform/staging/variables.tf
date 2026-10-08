@@ -7,7 +7,7 @@ variable "project" {
 variable "env" {
   description = "환경 이름. prod 폴더에서는 prod로 바꾼다"
   type        = string
-  default     = "dev"
+  default     = "staging"
 }
 
 variable "region" {
@@ -17,9 +17,9 @@ variable "region" {
 }
 
 variable "be_domain" {
-  description = "dev BE 도메인. ALB에서 이 도메인으로 온 요청을 BE 서비스로 보낸다"
+  description = "staging BE 도메인. ALB에서 이 도메인으로 온 요청을 BE 서비스로 보낸다"
   type        = string
-  default     = "v2-api-dev.meety.io.kr"
+  default     = "api-staging.meety.io.kr"
 }
 
 # 아래 값은 오늘 테스트 컨테이너(nginx) 기준이다. BE를 배포할 때(10/10) BE 값으로 바꾼다.

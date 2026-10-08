@@ -1,4 +1,4 @@
-# dev/, prod/ 폴더가 terraform_remote_state로 읽어 가는 값
+# staging/, prod/ 폴더가 terraform_remote_state로 읽어 가는 값
 
 output "vpc_id" {
   description = "V2 VPC ID"
@@ -20,21 +20,6 @@ output "alb_security_group_id" {
   value       = aws_security_group.alb.id
 }
 
-output "dev_cert_validation_records" {
-  description = "외부 DNS에 추가할 ACM 검증용 CNAME (이름, 값)"
-  value = {
-    for o in aws_acm_certificate.dev.domain_validation_options : o.domain_name => {
-      type  = o.resource_record_type
-      name  = o.resource_record_name
-      value = o.resource_record_value
-    }
-  }
-}
-
-output "dev_cert_arn" {
-  description = "V2 dev 인증서 ARN (ALB HTTPS 리스너에서 사용)"
-  value       = aws_acm_certificate.dev.arn
-}
 
 output "alb_dns_name" {
   description = "ALB 주소. 외부 DNS의 CNAME 값으로 쓴다"
@@ -47,6 +32,22 @@ output "alb_arn_suffix" {
 }
 
 output "https_listener_arn" {
-  description = "HTTPS 리스너 ARN. dev/, prod/에서 도메인별 전달 규칙을 이 리스너에 붙인다"
+  description = "HTTPS 리스너 ARN. staging/, prod/에서 도메인별 전달 규칙을 이 리스너에 붙인다"
   value       = aws_lb_listener.https.arn
+}
+
+output "staging_cert_validation_records" {
+  description = "외부 DNS에 추가할 staging 인증서 검증용 CNAME (이름, 값)"
+  value = {
+    for o in aws_acm_certificate.staging.domain_validation_options : o.domain_name => {
+      type  = o.resource_record_type
+      name  = o.resource_record_name
+      value = o.resource_record_value
+    }
+  }
+}
+
+output "staging_cert_arn" {
+  description = "V2 staging 인증서 ARN (ALB HTTPS 리스너에서 사용)"
+  value       = aws_acm_certificate.staging.arn
 }

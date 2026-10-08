@@ -1,11 +1,11 @@
-# V2 ALB: dev와 prod가 같이 쓰고, 도메인(Host 헤더)별로 환경을 나눈다.
-# - 여기서는 ALB와 리스너만 만든다. 도메인별 전달 규칙과 대상 그룹은 dev/, prod/ 폴더에서 만든다.
+# V2 ALB: staging과 prod가 같이 쓰고, 도메인(Host 헤더)별로 환경을 나눈다.
+# - 여기서는 ALB와 리스너만 만든다. 도메인별 전달 규칙과 대상 그룹은 staging/, prod/ 폴더에서 만든다.
 # - 규칙에 맞지 않는 요청은 기본 동작으로 404를 돌려준다.
 
 # 인증서 발급 완료를 확인한다. DNS 검증 레코드는 외부 DNS에 이미 등록했다.
 # 발급이 끝난 상태라 바로 통과하고, 발급 전이라면 끝날 때까지 기다린다.
-resource "aws_acm_certificate_validation" "dev" {
-  certificate_arn = aws_acm_certificate.dev.arn
+resource "aws_acm_certificate_validation" "staging" {
+  certificate_arn = aws_acm_certificate.staging.arn
 }
 
 resource "aws_lb" "main" {
@@ -53,7 +53,8 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06" # TLS 1.2, 1.3만 허용
-  certificate_arn   = aws_acm_certificate_validation.dev.certificate_arn
+  # prod 인증서는 prod 구성 때 aws_lb_listener_certificate로 추가한다
+  certificate_arn = aws_acm_certificate_validation.staging.certificate_arn
 
   # 어떤 환경 규칙에도 맞지 않는 요청 (등록하지 않은 도메인, ALB 주소로 직접 접속 등)
   default_action {

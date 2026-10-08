@@ -50,13 +50,3 @@ output "https_listener_arn" {
   description = "HTTPS 리스너 ARN. dev/, prod/에서 도메인별 전달 규칙을 이 리스너에 붙인다"
   value       = aws_lb_listener.https.arn
 }
-
-output "ecs_cluster_name" {
-  description = "ECS 클러스터 이름. dev/, prod/의 서비스가 이 클러스터에서 실행된다"
-  value       = aws_ecs_cluster.main.name
-}
-
-output "ecs_cluster_arn" {
-  description = "ECS 클러스터 ARN"
-  value       = aws_ecs_cluster.main.arn
-}

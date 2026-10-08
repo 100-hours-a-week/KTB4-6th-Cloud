@@ -35,3 +35,18 @@ output "dev_cert_arn" {
   description = "V2 dev 인증서 ARN (ALB HTTPS 리스너에서 사용)"
   value       = aws_acm_certificate.dev.arn
 }
+
+output "alb_dns_name" {
+  description = "ALB 주소. 외부 DNS의 CNAME 값으로 쓴다"
+  value       = aws_lb.main.dns_name
+}
+
+output "alb_arn_suffix" {
+  description = "CloudWatch 지표와 알람에서 ALB를 가리킬 때 쓰는 값"
+  value       = aws_lb.main.arn_suffix
+}
+
+output "https_listener_arn" {
+  description = "HTTPS 리스너 ARN. dev/, prod/에서 도메인별 전달 규칙을 이 리스너에 붙인다"
+  value       = aws_lb_listener.https.arn
+}

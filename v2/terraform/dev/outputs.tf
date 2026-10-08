@@ -7,3 +7,13 @@ output "ecs_cluster_arn" {
   description = "dev ECS 클러스터 ARN. 배포 역할의 권한 범위를 정할 때 쓴다"
   value       = aws_ecs_cluster.main.arn
 }
+
+output "be_service_name" {
+  description = "dev BE ECS 서비스 이름"
+  value       = aws_ecs_service.be.name
+}
+
+output "be_log_group" {
+  description = "dev BE 컨테이너 로그 그룹"
+  value       = aws_cloudwatch_log_group.be.name
+}

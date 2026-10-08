@@ -82,6 +82,8 @@ services:
       AWS_S3_REGION: "${AWS_S3_REGION}"
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      # 팀당 하루 회의 생성 제한. .env에 값이 없으면 BE prod 설정 기본값과 같은 5로 동작
+      MEETING_DAILY_CREATE_LIMIT: "${MEETING_DAILY_CREATE_LIMIT:-5}"
       TZ: Asia/Seoul
 
       SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "-1"   # DB 다운 상태에서도 앱 기동은 성공하도록

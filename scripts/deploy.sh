@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# 사용법: ./scripts/deploy.sh <app|data|ai> [--dev] [--env] [--diff]
+# 사용법: ./scripts/deploy.sh <app|data|ai> [--dev] [--env] [--diff] [--no-restart]
 #   --env  로컬 .env도 서버에 반영 (키만 비교해서 표시, 기존 .env는 백업)
 #   배포 성공 시 .env 백업 삭제, 실패 시 해당 배포의 백업 1개만 유지
 #   --diff 서버 파일과 로컬 파일의 내용 차이 표시 (.env·비밀 파일 제외)
+#   --no-restart  파일·.env 전송과 검증까지만 하고 컨테이너는 갱신하지 않음
+#                 (다음 배포 때 적용, 배포 이력은 남기지 않고 .env 백업은 보존)
 
 #   --dev  개발 환경(v1/dev, dev-* SSH 호스트)에 배포
 #   이미지 태그는 --env 사용 시에도 서버 값을 유지
@@ -39,14 +41,17 @@ REMOTE_DIR=meety   # 서버 홈 기준 경로
 DEPLOY_ENV=prod    # 기본값: 운영 환경
 ENV_SYNC=false     # --env: 로컬 .env를 서버에 반영
 SHOW_DIFF=false    # --diff: 적용 전에 실제 서버 파일과 내용 비교
+NO_RESTART=false   # --no-restart: 컨테이너 갱신(5단계) 생략
 for opt in "${@:2}"; do
   case "$opt" in
     --env) ENV_SYNC=true ;;
     --dev) DEPLOY_ENV=dev ;;
     --diff) SHOW_DIFF=true ;;
-    *)     fail "알 수 없는 옵션: $opt (사용 가능: --dev, --env, --diff)" ;;
+    --no-restart) NO_RESTART=true ;;
+    *)     fail "알 수 없는 옵션: $opt (사용 가능: --dev, --env, --diff, --no-restart)" ;;
   esac
 done
+if $NO_RESTART; then TOTAL_STEPS=4; fi
 
 # 변경 파일 출력 형식(--out-format)은 GNU rsync에서만 동작
 [[ "$(rsync --version)" == "rsync  version 3"* ]] \
@@ -237,6 +242,9 @@ if $ENV_SYNC; then
   fi
   info "환경변수 로컬 .env를 서버에 반영 (--env)"
 fi
+if $NO_RESTART; then
+  info "재시작  하지 않음 (--no-restart, 다음 배포 때 컨테이너에 적용)"
+fi
 
 # 서버에 마지막으로 배포된 상태 (형식: 시각 커밋 브랜치)
 LAST=$(remote 'tail -n 1 ~/deploy-history.log 2>/dev/null' || true)
@@ -299,6 +307,7 @@ fi
 
 ENV_NOTE=""
 if $ENV_CHANGED; then ENV_NOTE="+ .env "; fi
+if $NO_RESTART; then ENV_NOTE="${ENV_NOTE}(재시작 없음) "; fi
 
 echo
 read -rp "${BOLD}[$DEPLOY_ENV/$TARGET] $BRANCH @ $SHA ${ENV_NOTE}적용할까요? (y/N)${RESET} " answer
@@ -412,6 +421,17 @@ if [ "$TARGET" = "app" ]; then
   echo "  ${G}nginx 설정 통과${R}"
 fi
 EOF
+
+# --no-restart: 컨테이너는 그대로 두고 종료한다.
+# 실제로 적용된 커밋만 배포 이력에 남기고, 적용 전이라 .env 백업도 삭제하지 않는다.
+if $NO_RESTART; then
+  echo
+  info "컨테이너는 갱신하지 않았습니다. 다음 배포(docker compose up) 때 적용됩니다."
+  [ -z "$BAK" ] || info ".env 백업 보존: ~/$REMOTE_DIR/$BAK"
+  echo
+  echo "${GREEN}${BOLD}완료 (재시작 없음)${RESET}  $DEPLOY_ENV/$TARGET @ $BRANCH $SHA (${SECONDS}초)"
+  exit 0
+fi
 
 # ---------- 5. 적용 ----------
 step 5 "적용"

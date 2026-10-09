@@ -52,6 +52,8 @@ services:
       MYSQL_USER: "$${DB_USER}"
       MYSQL_PASSWORD: "$${DB_PASSWORD}"
       MYSQL_ROOT_PASSWORD: "$${DB_ROOT_PASSWORD}"
+      # root는 컨테이너 안에서만 쓴다. BE는 앱 계정으로 접속하고, 관리 작업은 SSM으로 들어와 한다
+      MYSQL_ROOT_HOST: localhost
       TZ: Asia/Seoul
       LANG: C.UTF-8
     volumes:

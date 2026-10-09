@@ -58,3 +58,42 @@ resource "aws_vpc_security_group_egress_rule" "fe_all" {
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"
 }
+
+# staging DB 보안 그룹: MySQL과 Redis가 같은 인스턴스에서 동작한다.
+# 이름과 설명은 바꾸면 보안 그룹이 교체되므로 인스턴스 기준으로 두고, 포트는 아래 규칙으로 표현한다.
+# staging BE에서 오는 연결만 받는다. SSH는 열지 않고 SSM으로 접속한다.
+resource "aws_security_group" "db" {
+  name        = "${local.name_prefix}-db-sg"
+  description = "V2 staging DB instance"
+  vpc_id      = local.shared.vpc_id
+
+  tags = {
+    Name = "${local.name_prefix}-db-sg"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "db_mysql_from_be" {
+  security_group_id            = aws_security_group.db.id
+  description                  = "MySQL from staging BE"
+  referenced_security_group_id = aws_security_group.be.id
+  ip_protocol                  = "tcp"
+  from_port                    = 3306
+  to_port                      = 3306
+}
+
+resource "aws_vpc_security_group_ingress_rule" "db_redis_from_be" {
+  security_group_id            = aws_security_group.db.id
+  description                  = "Redis from staging BE"
+  referenced_security_group_id = aws_security_group.be.id
+  ip_protocol                  = "tcp"
+  from_port                    = 6379
+  to_port                      = 6379
+}
+
+# 패키지와 이미지 받기, SSM 연결은 FE/NAT 인스턴스를 거쳐 인터넷으로 나간다
+resource "aws_vpc_security_group_egress_rule" "db_all" {
+  security_group_id = aws_security_group.db.id
+  description       = "Outbound"
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
+}

@@ -1,0 +1,8 @@
+# state와 실행 산출물은 Git에 올리지 않는다 (public 저장소)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+tfplan
+*.log

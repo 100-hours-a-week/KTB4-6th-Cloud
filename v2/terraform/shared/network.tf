@@ -1,5 +1,5 @@
 # V2 네트워크: VPC 1개, 2개 AZ의 public 서브넷, 인터넷 게이트웨이
-# ALB와 ECS 태스크가 public 서브넷을 쓴다. DB용 서브넷은 DB 구성 때(10/9) 추가한다.
+# ALB와 ECS 태스크가 public 서브넷을 쓴다. DB, Redis용 private 서브넷과 라우팅은 환경별 폴더(staging/, prod/)에서 만든다.
 
 resource "aws_vpc" "main" {
   cidr_block = var.vpc_cidr

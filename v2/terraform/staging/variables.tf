@@ -58,3 +58,21 @@ variable "log_retention_days" {
   type        = number
   default     = 14
 }
+
+variable "fe_ami_id" {
+  description = "FE 인스턴스 AMI. Ubuntu 26.04 amd64 (Canonical, 20261003). 새 AMI로 바꾸면 인스턴스가 교체된다"
+  type        = string
+  default     = "ami-0e677ebf2c8434c2a"
+}
+
+variable "fe_instance_type" {
+  description = "FE 인스턴스 타입. NAT를 겸하며, 처리 용량은 검증 전 초기값이다"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "fe_root_volume_size" {
+  description = "FE 인스턴스 루트 볼륨 크기(GB). FE 앱(Docker, nginx)을 올릴 여유를 둔다"
+  type        = number
+  default     = 20
+}

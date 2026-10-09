@@ -1,0 +1,24 @@
+#!/bin/bash
+# FE 인스턴스를 staging private 서브넷의 NAT로 쓰기 위한 설정 (첫 부팅 때 1회 실행)
+# 재부팅 후에도 유지되도록 sysctl 설정 파일과 netfilter-persistent에 저장한다.
+set -euo pipefail
+
+# 1. 다른 서브넷에서 받은 패킷을 전달하도록 IP forwarding을 켠다
+echo 'net.ipv4.ip_forward = 1' > /etc/sysctl.d/99-nat.conf
+sysctl --system
+
+# 2. iptables 규칙을 재부팅 후에도 불러오도록 iptables-persistent를 설치한다
+export DEBIAN_FRONTEND=noninteractive
+echo 'iptables-persistent iptables-persistent/autosave_v4 boolean false' | debconf-set-selections
+echo 'iptables-persistent iptables-persistent/autosave_v6 boolean false' | debconf-set-selections
+apt-get update
+apt-get install -y iptables iptables-persistent
+
+# 3. private 서브넷에서 온 트래픽만 이 인스턴스의 IP로 바꿔 내보낸다
+iface=$(ip route show default | awk '{print $5; exit}')
+for cidr in ${private_cidrs}; do
+  iptables -t nat -C POSTROUTING -s "$cidr" -o "$iface" -j MASQUERADE 2>/dev/null \
+    || iptables -t nat -A POSTROUTING -s "$cidr" -o "$iface" -j MASQUERADE
+done
+
+netfilter-persistent save

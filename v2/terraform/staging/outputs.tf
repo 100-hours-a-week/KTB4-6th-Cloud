@@ -13,6 +13,11 @@ output "be_service_name" {
   value       = aws_ecs_service.be.name
 }
 
+output "private_subnet_ids" {
+  description = "staging private 서브넷 ID 목록 (AZ 순서). DB, Redis EC2를 둔다"
+  value       = aws_subnet.private[*].id
+}
+
 output "be_log_group" {
   description = "staging BE 컨테이너 로그 그룹"
   value       = aws_cloudwatch_log_group.be.name

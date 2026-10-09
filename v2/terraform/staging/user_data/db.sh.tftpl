@@ -1,0 +1,82 @@
+#!/bin/bash
+# staging DB 인스턴스 초기 설정 (첫 부팅 때 1회 실행)
+# MySQL과 Redis를 V1처럼 Docker compose로 같은 인스턴스에서 실행한다.
+# 패키지와 이미지는 private 서브넷의 기본 경로(FE/NAT 인스턴스)를 거쳐 받는다.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+# 1. Docker, compose 플러그인과 AWS CLI 설치 (Ubuntu 26.04에는 AWS CLI apt 패키지가 없어 snap을 쓴다)
+apt-get update
+apt-get install -y docker.io docker-compose-v2
+snap install aws-cli --classic
+systemctl enable --now docker
+
+# 2. Parameter Store에서 DB와 Redis 접속 정보를 읽어 root만 읽을 수 있는 .env로 저장한다.
+#    값은 user_data와 Terraform state에 들어가지 않는다.
+get() {
+  /snap/bin/aws ssm get-parameter --region ${region} --name "${param_path}/$1" \
+    --with-decryption --query Parameter.Value --output text
+}
+
+install -d -m 700 /opt/meety
+umask 077
+cat > /opt/meety/.env <<ENV
+DB_NAME=$(get DB_NAME)
+DB_USER=$(get DB_USER)
+DB_PASSWORD=$(get DB_PASSWORD)
+DB_ROOT_PASSWORD=$(get DB_ROOT_PASSWORD)
+REDIS_PASSWORD=$(get REDIS_PASSWORD)
+ENV
+
+# 3. compose 파일. 문자 집합과 시간대는 V1 prod 설정과 맞춘다.
+#    Redis는 SSE Pub/Sub 용도라 저장할 데이터가 없어 디스크 저장(RDB, AOF)을 끈다.
+cat > /opt/meety/docker-compose.yml <<'COMPOSE'
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    container_name: staging-db
+    image: ${mysql_image}
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_DATABASE: "$${DB_NAME}"
+      MYSQL_USER: "$${DB_USER}"
+      MYSQL_PASSWORD: "$${DB_PASSWORD}"
+      MYSQL_ROOT_PASSWORD: "$${DB_ROOT_PASSWORD}"
+      TZ: Asia/Seoul
+      LANG: C.UTF-8
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+
+  redis:
+    container_name: staging-redis
+    image: ${redis_image}
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--requirepass", "$${REDIS_PASSWORD}", "--save", "", "--appendonly", "no"]
+    logging: *default-logging
+
+volumes:
+  db_data:
+COMPOSE
+
+# 4. 실행. restart: unless-stopped와 docker 서비스 자동 시작으로 재부팅 후에도 다시 뜬다.
+cd /opt/meety
+docker compose up -d

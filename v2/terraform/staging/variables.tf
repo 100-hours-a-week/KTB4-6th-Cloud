@@ -76,3 +76,33 @@ variable "fe_root_volume_size" {
   type        = number
   default     = 20
 }
+
+variable "db_ami_id" {
+  description = "DB 인스턴스 AMI. Ubuntu 26.04 arm64 (Canonical, 20261003). 새 AMI로 바꾸면 인스턴스가 교체된다"
+  type        = string
+  default     = "ami-01e3230cee0cae555"
+}
+
+variable "db_instance_type" {
+  description = "DB 인스턴스 타입. DB 사이징 설계의 초기값(t4g.small)이며, 처리 용량은 실측 전이다"
+  type        = string
+  default     = "t4g.small"
+}
+
+variable "db_root_volume_size" {
+  description = "DB 인스턴스 루트 볼륨 크기(GB). DB 사이징 설계의 비용 산정 기준(노드당 30GB)"
+  type        = number
+  default     = 30
+}
+
+variable "db_mysql_image" {
+  description = "MySQL 컨테이너 이미지. V1과 같은 8.4 계열을 패치 버전까지 고정한다"
+  type        = string
+  default     = "mysql:8.4.11"
+}
+
+variable "db_redis_image" {
+  description = "Redis 컨테이너 이미지. BE의 SSE Pub/Sub 용도"
+  type        = string
+  default     = "redis:8.10.2"
+}

@@ -22,3 +22,8 @@ output "be_log_group" {
   description = "staging BE 컨테이너 로그 그룹"
   value       = aws_cloudwatch_log_group.be.name
 }
+
+output "db_private_ip" {
+  description = "staging DB 인스턴스 private IP. BE의 DB_HOST, REDIS_HOST로 쓴다 (#28)"
+  value       = aws_instance.db.private_ip
+}

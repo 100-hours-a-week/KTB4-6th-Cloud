@@ -26,13 +26,21 @@ resource "aws_subnet" "private" {
   }
 }
 
-# 외부로 나가는 경로(FE/NAT 인스턴스)는 인스턴스를 만들 때 aws_route로 따로 추가한다
+# 외부로 나가는 경로(FE/NAT 인스턴스)는 아래 aws_route로 따로 둔다
 resource "aws_route_table" "private" {
   vpc_id = local.shared.vpc_id
 
   tags = {
     Name = "${local.name_prefix}-private-rt"
   }
+}
+
+# private 서브넷에서 VPC 밖으로 나가는 트래픽은 FE 인스턴스(NAT)로 보낸다.
+# VPC 안의 통신(예: ECS → DB)은 local 경로를 타므로 NAT를 거치지 않는다.
+resource "aws_route" "private_nat" {
+  route_table_id         = aws_route_table.private.id
+  destination_cidr_block = "0.0.0.0/0"
+  network_interface_id   = aws_instance.fe.primary_network_interface_id
 }
 
 resource "aws_route_table_association" "private" {

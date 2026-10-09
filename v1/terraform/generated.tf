@@ -1,10 +1,5 @@
 # Please review these resources and move them into your main configuration files.
 
-resource "aws_iam_role_policy_attachment" "ec2_cloudwatch_ssm_deploy" {
-  policy_arn = "arn:aws:iam::${local.account_id}:policy/meety-GitHubActions-SSM-Deploy"
-  role       = "meety-ec2-cloudwatch-role"
-}
-
 resource "aws_iam_instance_profile" "ec2_prod" {
   name     = "meety-ec2-prod"
   path     = "/"
@@ -116,18 +111,16 @@ resource "aws_iam_role" "github_actions_ssm" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-        }
-        StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:100-hours-a-week*/KTB4-6th-FE*:environment:production",
-            "repo:100-hours-a-week*/KTB4-6th-FE*:environment:staging",
-            "repo:100-hours-a-week*/KTB4-6th-FE*:environment:production-migration-approval",
-            "repo:100-hours-a-week*/KTB4-6th-BE*:environment:production",
-            "repo:100-hours-a-week*/KTB4-6th-BE*:environment:staging",
-            "repo:100-hours-a-week*/KTB4-6th-BE*:environment:production-migration-approval",
-            "repo:100-hours-a-week*/KTB4-6th-AI*:environment:production",
-            "repo:100-hours-a-week*/KTB4-6th-AI*:environment:staging",
-            "repo:100-hours-a-week*/KTB4-6th-AI*:environment:production-migration-approval",
+            "repo:100-hours-a-week@167328634/KTB4-6th-FE@1344634298:environment:production",
+            "repo:100-hours-a-week@167328634/KTB4-6th-FE@1344634298:environment:staging",
+            "repo:100-hours-a-week@167328634/KTB4-6th-FE@1344634298:environment:production-migration-approval",
+            "repo:100-hours-a-week@167328634/KTB4-6th-BE@1344634945:environment:production",
+            "repo:100-hours-a-week@167328634/KTB4-6th-BE@1344634945:environment:staging",
+            "repo:100-hours-a-week@167328634/KTB4-6th-BE@1344634945:environment:production-migration-approval",
+            "repo:100-hours-a-week@167328634/KTB4-6th-AI@1344635474:environment:production",
+            "repo:100-hours-a-week@167328634/KTB4-6th-AI@1344635474:environment:staging",
+            "repo:100-hours-a-week@167328634/KTB4-6th-AI@1344635474:environment:production-migration-approval",
           ]
         }
       }
@@ -339,16 +332,6 @@ resource "aws_vpc_security_group_ingress_rule" "ai_8000_from_app" {
   region                       = "us-east-2"
   security_group_id            = "sg-0cb07d86ec124f4bc"
   to_port                      = 8000
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_dev_ssm_deploy" {
-  policy_arn = "arn:aws:iam::${local.account_id}:policy/meety-GitHubActions-SSM-Deploy"
-  role       = "meety-ec2-v1-dev"
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_prod_ssm_deploy" {
-  policy_arn = "arn:aws:iam::${local.account_id}:policy/meety-GitHubActions-SSM-Deploy"
-  role       = "meety-ec2-prod"
 }
 
 resource "aws_iam_role_policy_attachment" "ec2_cloudwatch_params_read" {
@@ -672,10 +655,23 @@ resource "aws_iam_role_policy" "github_actions_ssm" {
   name = "SSMPolicy"
   policy = jsonencode({
     Statement = [{
-      Action   = ["ssm:SendCommand", "ssm:GetCommandInvocation"]
+      # FE/BE는 app 서버, AI는 ai 서버에만 배포 명령을 보낸다. data 서버는 제외한다.
+      Action = "ssm:SendCommand"
+      Effect = "Allow"
+      Resource = [
+        aws_instance.prod_app.arn,
+        aws_instance.prod_ai.arn,
+        aws_instance.dev_app.arn,
+        aws_instance.dev_ai.arn,
+        "arn:aws:ssm:us-east-2::document/AWS-RunShellScript",
+      ]
+      Sid = "SendDeployCommand"
+      }, {
+      # GetCommandInvocation은 리소스 단위 권한을 지원하지 않는다.
+      Action   = "ssm:GetCommandInvocation"
       Effect   = "Allow"
-      Resource = ["*"]
-      Sid      = "Statement1"
+      Resource = "*"
+      Sid      = "ReadCommandResult"
     }]
     Version = "2012-10-17"
   })

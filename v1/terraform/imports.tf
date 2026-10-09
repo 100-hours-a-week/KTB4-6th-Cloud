@@ -265,10 +265,11 @@ import {
   id = "arn:aws:iam::${local.account_id}:policy/meety-params-read-server"
 }
 
-import {
-  to = aws_iam_role_policy_attachment.ec2_prod_ssm_deploy
-  id = "meety-ec2-prod/arn:aws:iam::${local.account_id}:policy/meety-GitHubActions-SSM-Deploy"
-}
+# [#21] EC2 역할에서 배포 정책 연결 해제로 리소스 삭제. import 기록만 남긴다.
+# import {
+#   to = aws_iam_role_policy_attachment.ec2_prod_ssm_deploy
+#   id = "meety-ec2-prod/arn:aws:iam::${local.account_id}:policy/meety-GitHubActions-SSM-Deploy"
+# }
 
 import {
   to = aws_iam_role_policy_attachment.ec2_prod_s3_rw
@@ -290,10 +291,11 @@ import {
   id = "meety-ec2-prod/arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-import {
-  to = aws_iam_role_policy_attachment.ec2_dev_ssm_deploy
-  id = "meety-ec2-v1-dev/arn:aws:iam::${local.account_id}:policy/meety-GitHubActions-SSM-Deploy"
-}
+# [#21] EC2 역할에서 배포 정책 연결 해제로 리소스 삭제. import 기록만 남긴다.
+# import {
+#   to = aws_iam_role_policy_attachment.ec2_dev_ssm_deploy
+#   id = "meety-ec2-v1-dev/arn:aws:iam::${local.account_id}:policy/meety-GitHubActions-SSM-Deploy"
+# }
 
 import {
   to = aws_iam_role_policy_attachment.ec2_dev_s3_rw
@@ -315,10 +317,11 @@ import {
   id = "meety-ec2-v1-dev/arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-import {
-  to = aws_iam_role_policy_attachment.ec2_cloudwatch_ssm_deploy
-  id = "meety-ec2-cloudwatch-role/arn:aws:iam::${local.account_id}:policy/meety-GitHubActions-SSM-Deploy"
-}
+# [#21] EC2 역할에서 배포 정책 연결 해제로 리소스 삭제. import 기록만 남긴다.
+# import {
+#   to = aws_iam_role_policy_attachment.ec2_cloudwatch_ssm_deploy
+#   id = "meety-ec2-cloudwatch-role/arn:aws:iam::${local.account_id}:policy/meety-GitHubActions-SSM-Deploy"
+# }
 
 import {
   to = aws_iam_role_policy_attachment.ec2_cloudwatch_params_read

@@ -34,5 +34,28 @@ services:
       start_period: 30s
     logging: *default-logging
 
+  redis:
+    container_name: dev-redis
+    image: redis:7.4
+    restart: unless-stopped
+    ports:
+      # app 서버는 dev-data의 6376 포트로 접속한다.
+      - "6376:6379"
+    command:
+      # 컨테이너 재시작 후에도 데이터를 복구할 수 있도록 AOF를 활성화한다.
+      - redis-server
+      - --appendonly
+      - "yes"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+
 volumes:
   db_data:
+  redis_data:

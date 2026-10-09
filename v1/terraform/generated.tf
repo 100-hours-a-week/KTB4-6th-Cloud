@@ -421,6 +421,17 @@ resource "aws_vpc_security_group_ingress_rule" "data_redis_from_app" {
   to_port                      = 6379
 }
 
+# data SG는 prod/dev가 공유하므로 기존 6379 규칙과 별도로 dev 포트를 허용한다.
+resource "aws_vpc_security_group_ingress_rule" "data_dev_redis_from_app" {
+  description                  = "Dev Redis from app tier"
+  from_port                    = 6376
+  ip_protocol                  = "tcp"
+  referenced_security_group_id = "sg-09ac11928cda5a281"
+  region                       = "us-east-2"
+  security_group_id            = aws_security_group.data.id
+  to_port                      = 6376
+}
+
 resource "aws_vpc_security_group_egress_rule" "ai_all" {
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"

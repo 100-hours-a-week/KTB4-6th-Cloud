@@ -27,3 +27,34 @@ resource "aws_vpc_security_group_egress_rule" "be_all" {
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"
 }
+
+# staging FE 보안 그룹: FE 인스턴스가 NAT 인스턴스를 겸한다.
+# 이름과 설명은 바꾸면 보안 그룹이 교체되므로 FE 기준으로 두고, NAT 용도는 아래 규칙으로 표현한다.
+# FE 앱 포트(ALB에서 오는 요청)는 FE 앱 배포 때 추가한다. SSH는 열지 않고 SSM으로 접속한다.
+resource "aws_security_group" "fe" {
+  name        = "${local.name_prefix}-fe-sg"
+  description = "V2 staging FE instance"
+  vpc_id      = local.shared.vpc_id
+
+  tags = {
+    Name = "${local.name_prefix}-fe-sg"
+  }
+}
+
+# NAT: staging private 서브넷에서 외부로 나가는 트래픽만 받는다
+resource "aws_vpc_security_group_ingress_rule" "fe_nat_from_private" {
+  count = length(aws_subnet.private)
+
+  security_group_id = aws_security_group.fe.id
+  description       = "NAT from staging private subnet"
+  cidr_ipv4         = aws_subnet.private[count.index].cidr_block
+  ip_protocol       = "-1"
+}
+
+# 패키지 설치, SSM 연결, NAT로 전달하는 트래픽이 인터넷으로 나간다
+resource "aws_vpc_security_group_egress_rule" "fe_all" {
+  security_group_id = aws_security_group.fe.id
+  description       = "Outbound"
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
+}

@@ -15,7 +15,7 @@ locals {
 # IAM 정책에서 Parameter Store 경로의 ARN을 만들 때 계정 ID를 코드에 쓰지 않기 위해 조회한다
 data "aws_caller_identity" "current" {}
 
-# SecureString 기본 암호화 키(AWS 관리형). DB 인스턴스와 ECS가 비밀값을 복호화할 때 쓴다
+# SecureString 기본 암호화 키(AWS 관리형). DB, AI 인스턴스와 ECS가 비밀값을 복호화할 때 쓴다
 data "aws_kms_alias" "ssm" {
   name = "alias/aws/ssm"
 }

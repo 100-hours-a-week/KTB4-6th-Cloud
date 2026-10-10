@@ -192,3 +192,63 @@ resource "aws_iam_instance_profile" "db" {
     Name = "${local.name_prefix}-db"
   }
 }
+
+# AI 인스턴스 역할: SSM 접속과, 첫 부팅 때 BE와 공유하는 INTERNAL_API_KEY를 읽는 권한만 준다.
+resource "aws_iam_role" "ai" {
+  name = "${local.name_prefix}-ai"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-ai"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ai_ssm" {
+  role       = aws_iam_role.ai.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "ai_params" {
+  name = "read-ai-params"
+  role = aws_iam_role.ai.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # AI가 챗봇 처리 중 BE 내부 API를 부를 때 쓰는 키. BE와 같은 값을 쓴다
+        Sid      = "ReadInternalApiKey"
+        Effect   = "Allow"
+        Action   = "ssm:GetParameter"
+        Resource = "${local.param_arn_prefix}/be/INTERNAL_API_KEY"
+      },
+      {
+        # SecureString 복호화는 Parameter Store를 거친 요청에만 허용한다
+        Sid      = "DecryptViaSsm"
+        Effect   = "Allow"
+        Action   = "kms:Decrypt"
+        Resource = data.aws_kms_alias.ssm.target_key_arn
+        Condition = {
+          StringEquals = { "kms:ViaService" = "ssm.${var.region}.amazonaws.com" }
+        }
+      },
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "ai" {
+  name = "${local.name_prefix}-ai"
+  role = aws_iam_role.ai.name
+
+  tags = {
+    Name = "${local.name_prefix}-ai"
+  }
+}

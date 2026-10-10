@@ -63,18 +63,6 @@ variable "be_health_check_path" {
   default     = "/actuator/health"
 }
 
-variable "be_ai_http_url" {
-  description = "BE가 호출하는 AI HTTP 주소. 서울에 AI가 없어 기동만 되도록 연결되지 않는 자리표시 값을 둔다"
-  type        = string
-  default     = "http://ai.invalid:8001"
-}
-
-variable "be_ai_websocket_url" {
-  description = "BE가 연결하는 AI WebSocket 주소. be_ai_http_url과 같은 이유로 자리표시 값을 둔다"
-  type        = string
-  default     = "ws://ai.invalid:8000/v1/live-meeting"
-}
-
 variable "be_kakao_redirect_uri" {
   description = "카카오 로그인 redirect URI. 카카오 콘솔에 등록한 값과 같아야 한다"
   type        = string

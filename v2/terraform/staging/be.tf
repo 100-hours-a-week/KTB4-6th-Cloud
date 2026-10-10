@@ -47,8 +47,9 @@ resource "aws_ecs_task_definition" "be" {
       { name = "REDIS_PORT", value = "6379" },
       { name = "KAKAO_REDIRECT_URI", value = var.be_kakao_redirect_uri },
       { name = "CORS_ALLOWED_ORIGINS", value = join(",", var.fe_allowed_origins) },
-      { name = "AI_HTTP_URL", value = var.be_ai_http_url },
-      { name = "AI_WEBSOCKET_URL", value = var.be_ai_websocket_url },
+      # AI 인스턴스의 private IP로 직접 부른다 (ai-analysis 8001, ai-live 8000)
+      { name = "AI_HTTP_URL", value = "http://${aws_instance.ai.private_ip}:8001" },
+      { name = "AI_WEBSOCKET_URL", value = "ws://${aws_instance.ai.private_ip}:8000/v1/live-meeting" },
       { name = "AWS_S3_BUCKET", value = aws_s3_bucket.files.bucket },
       { name = "AWS_S3_REGION", value = var.region },
       # 테스트 편의를 위해 V1 dev와 같은 값을 쓴다 (녹음, 요약, 챗봇, 리포트 크레딧 차감 없음, 회의 생성 하루 100회)

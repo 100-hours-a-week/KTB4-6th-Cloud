@@ -18,6 +18,17 @@ resource "aws_vpc_security_group_ingress_rule" "app_http" {
   to_port           = 80
 }
 
+# app/AI SG는 prod/dev가 공유한다. AI SG에서만 BE 내부 API 포트 접근을 허용한다.
+resource "aws_vpc_security_group_ingress_rule" "app_8080_from_ai" {
+  description                  = "Backend internal API from AI tier"
+  from_port                    = 8080
+  ip_protocol                  = "tcp"
+  referenced_security_group_id = aws_security_group.ai.id
+  region                       = "us-east-2"
+  security_group_id            = aws_security_group.app.id
+  to_port                      = 8080
+}
+
 resource "aws_security_group" "ai" {
   description = "ai-tier-SG"
   name        = "ai-sg-v1"

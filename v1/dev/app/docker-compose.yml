@@ -92,7 +92,6 @@ services:
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS}"
       AI_WEBSOCKET_URL: "${AI_WEBSOCKET_URL}"
       AI_HTTP_URL: "${AI_HTTP_URL}"
-      # 챗봇 내부 API 인증 키는 서버 .env에서 주입한다.
       INTERNAL_API_KEY: "${INTERNAL_API_KEY}"
       AWS_S3_BUCKET: "${AWS_S3_BUCKET}"
       AWS_S3_REGION: "${AWS_S3_REGION}"

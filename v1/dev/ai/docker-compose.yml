@@ -49,6 +49,9 @@ services:
       # 가짜 요약·화자 분리 응답 지연(ms). 실제 앱에서는 읽지 않는다.
       FAKE_SUMMARY_LATENCY_MS: "${FAKE_SUMMARY_LATENCY_MS:-15500}"
       FAKE_DIARIZATION_LATENCY_MS: "${FAKE_DIARIZATION_LATENCY_MS:-7000}"
+      # 챗봇
+      MEETY_BACKEND_BASE_URL: "${MEETY_BACKEND_BASE_URL}"
+      INTERNAL_API_KEY: "${INTERNAL_API_KEY}"
     healthcheck:
       # curl/wget이 없는 이미지이므로 python 표준 라이브러리로 대체
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]

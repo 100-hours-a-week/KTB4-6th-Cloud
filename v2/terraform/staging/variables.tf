@@ -106,3 +106,9 @@ variable "db_redis_image" {
   type        = string
   default     = "redis:8.10.2"
 }
+
+variable "fe_allowed_origins" {
+  description = "staging FE 주소(origin) 목록. 파일 버킷 CORS에 쓴다. 로컬 FE에서 staging BE를 붙여 시험할 수 있게 localhost도 둔다"
+  type        = list(string)
+  default     = ["https://staging.meety.io.kr", "http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"]
+}

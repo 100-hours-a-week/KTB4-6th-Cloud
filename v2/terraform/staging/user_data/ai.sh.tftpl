@@ -1,0 +1,85 @@
+#!/bin/bash
+# staging AI 인스턴스 초기 설정 (첫 부팅 때 1회 실행)
+# V1 dev처럼 실시간 STT(ai-live)와 분석(ai-analysis) 컨테이너를 Docker compose로 같은 인스턴스에서 실행한다.
+# 외부 공급자(Speechmatics, OpenRouter, Modal) 대신 AI 저장소의 목업 앱(meety_ai.fake_providers)을 띄워 비용 없이 BE 연동을 검증한다.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+# 1. Docker, compose 플러그인과 AWS CLI 설치 (Ubuntu 26.04에는 AWS CLI apt 패키지가 없어 snap을 쓴다)
+apt-get update
+apt-get install -y docker.io docker-compose-v2
+snap install aws-cli --classic
+systemctl enable --now docker
+
+# 2. BE와 공유하는 INTERNAL_API_KEY를 Parameter Store에서 읽어 root만 읽을 수 있는 .env로 저장한다.
+#    값은 user_data와 Terraform state에 들어가지 않는다.
+install -d -m 700 /opt/meety
+umask 077
+cat > /opt/meety/.env <<ENV
+INTERNAL_API_KEY=$(/snap/bin/aws ssm get-parameter --region ${region} --name "${internal_api_key_param}" \
+  --with-decryption --query Parameter.Value --output text)
+ENV
+
+# 3. compose 파일
+#    목업 앱은 MEETY_ENVIRONMENT=production이면 기동을 거부하므로 staging으로 둔다.
+#    공급자 키는 설정 검증 때문에 값만 있으면 되고 목업 앱은 쓰지 않는다. 챗봇은 목업이 없어 동작하지 않는다.
+cat > /opt/meety/docker-compose.yml <<'COMPOSE'
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  ai-live:
+    container_name: staging-ai-live
+    image: ${ai_image}
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      MEETY_ENVIRONMENT: staging
+      MEETY_LOG_LEVEL: INFO
+      SPEECHMATICS_API_KEY: fake
+      FAKE_STT_LATENCY_MS: "3000"
+      MEETY_MAX_RECORDING_CONNECTIONS: "100"
+      TZ: Asia/Seoul
+    command: ["uvicorn", "meety_ai.fake_providers:create_live_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+
+  ai-analysis:
+    container_name: staging-ai-analysis
+    image: ${ai_image}
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      MEETY_ENVIRONMENT: staging
+      MEETY_LOG_LEVEL: INFO
+      OPENROUTER_API_KEY: fake
+      MODAL_TOKEN_ID: fake
+      MODAL_TOKEN_SECRET: fake
+      FAKE_SUMMARY_LATENCY_MS: "15500"
+      FAKE_DIARIZATION_LATENCY_MS: "7000"
+      MEETY_BACKEND_BASE_URL: "${backend_base_url}"
+      INTERNAL_API_KEY: "$${INTERNAL_API_KEY}"
+      TZ: Asia/Seoul
+    command: ["uvicorn", "meety_ai.fake_providers:create_analysis_app", "--factory", "--host", "0.0.0.0", "--port", "8001"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+COMPOSE
+
+# 4. 실행. restart: unless-stopped와 docker 서비스 자동 시작으로 재부팅 후에도 다시 뜬다.
+cd /opt/meety
+docker compose up -d

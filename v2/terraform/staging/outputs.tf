@@ -27,3 +27,8 @@ output "db_private_ip" {
   description = "staging DB 인스턴스 private IP. BE의 DB_HOST, REDIS_HOST로 쓴다 (#28)"
   value       = aws_instance.db.private_ip
 }
+
+output "ai_private_ip" {
+  description = "staging AI 인스턴스 private IP. BE의 AI_HTTP_URL, AI_WEBSOCKET_URL에 쓴다"
+  value       = aws_instance.ai.private_ip
+}

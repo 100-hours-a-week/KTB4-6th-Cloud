@@ -38,17 +38,33 @@ resource "aws_ecs_task_definition" "be" {
       { name = "SPRING_PROFILES_ACTIVE", value = "staging" },
       # staging profile의 ddl-auto create는 기동할 때마다 테이블을 다시 만든다.
       # 첫 기동에서 스키마를 만든 뒤에는 validate로 덮어써 데이터를 유지하고, 엔티티와 스키마 차이는 기동 실패로 드러나게 한다
-      { name = "SPRING_JPA_HIBERNATE_DDL_AUTO", value = "validate" },
+      { name = "SPRING_JPA_HIBERNATE_DDL_AUTO", value = var.be_ddl_auto },
+      # V1 dev, prod와 같이 KST로 동작한다. 기존 데이터 시각이 KST로 저장돼 있어 마이그레이션 후에도 맞아야 한다
+      { name = "TZ", value = "Asia/Seoul" },
       { name = "DB_HOST", value = aws_instance.db.private_ip },
       { name = "DB_PORT", value = "3306" },
       { name = "REDIS_HOST", value = aws_instance.db.private_ip },
       { name = "REDIS_PORT", value = "6379" },
       { name = "KAKAO_REDIRECT_URI", value = var.be_kakao_redirect_uri },
       { name = "CORS_ALLOWED_ORIGINS", value = join(",", var.fe_allowed_origins) },
-      { name = "AI_HTTP_URL", value = var.be_ai_http_url },
-      { name = "AI_WEBSOCKET_URL", value = var.be_ai_websocket_url },
+      # AI 인스턴스의 private IP로 직접 부른다 (ai-analysis 8001, ai-live 8000)
+      { name = "AI_HTTP_URL", value = "http://${aws_instance.ai.private_ip}:8001" },
+      { name = "AI_WEBSOCKET_URL", value = "ws://${aws_instance.ai.private_ip}:8000/v1/live-meeting" },
       { name = "AWS_S3_BUCKET", value = aws_s3_bucket.files.bucket },
       { name = "AWS_S3_REGION", value = var.region },
+      # 테스트 편의를 위해 V1 dev와 같은 값을 쓴다 (녹음, 요약, 챗봇, 리포트 크레딧 차감 없음, 회의 생성 하루 100회)
+      { name = "MEETING_DAILY_CREATE_LIMIT", value = "100" },
+      { name = "CREDIT_RECORDING_COST", value = "0" },
+      { name = "CREDIT_SUMMARY_REGENERATE_COST", value = "0" },
+      { name = "CREDIT_AI_CHAT_MESSAGE_COST", value = "0" },
+      { name = "CREDIT_ANALYSIS_REPORT_COST", value = "0" },
+      # Sentry는 V1 dev와 같은 프로젝트로 보내되, environment를 나눠 V1 dev(staging) 이벤트와 섞이지 않게 한다
+      { name = "SENTRY_ENVIRONMENT", value = "v2-staging" },
+      { name = "SENTRY_SEND_DEFAULT_PII", value = "true" },
+      { name = "BE_SENTRY_LOGS_ENABLED", value = "true" },
+      { name = "BE_SENTRY_TRACES_SAMPLE_RATE", value = "1.0" },
+      { name = "SENTRY_PROFILE_SESSION_SAMPLE_RATE", value = "1.0" },
+      { name = "SENTRY_PROFILE_LIFECYCLE", value = "TRACE" },
     ]
 
     # 비밀값은 태스크가 시작할 때 ECS가 Parameter Store에서 읽어 넣는다 (실행 역할 권한).
@@ -62,6 +78,8 @@ resource "aws_ecs_task_definition" "be" {
       { name = "KAKAO_CLIENT_ID", valueFrom = "${local.param_arn_prefix}/be/KAKAO_CLIENT_ID" },
       { name = "KAKAO_CLIENT_SECRET", valueFrom = "${local.param_arn_prefix}/be/KAKAO_CLIENT_SECRET" },
       { name = "KAKAO_ADMIN_KEY", valueFrom = "${local.param_arn_prefix}/be/KAKAO_ADMIN_KEY" },
+      { name = "INTERNAL_API_KEY", valueFrom = "${local.param_arn_prefix}/be/INTERNAL_API_KEY" },
+      { name = "SENTRY_DSN", valueFrom = "${local.param_arn_prefix}/be/SENTRY_DSN" },
     ]
 
     logConfiguration = {

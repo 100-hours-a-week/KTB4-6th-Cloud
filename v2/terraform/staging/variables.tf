@@ -23,9 +23,20 @@ variable "be_domain" {
 }
 
 variable "be_image" {
-  description = "BE 컨테이너 이미지. BE 41bf6a9 커밋의 amd64 이미지를 digest로 고정한다"
+  description = "BE 컨테이너 이미지. V1 dev와 같은 BE 131f245 커밋의 amd64 이미지를 digest로 고정한다"
   type        = string
-  default     = "devkyulim/meety-be@sha256:7f284d3be4e7c964b9ba1e5523e3071b5c5566f38a4af115904721daaddee8a5"
+  default     = "devkyulim/meety-be@sha256:b6ce5a4d6ee9c607a3bd561663cfa16a21eac06acce004fe3ce6cca99fd55fc2"
+}
+
+variable "be_ddl_auto" {
+  description = "BE의 ddl-auto 값. 평소에는 validate로 두고, 빈 staging DB에 스키마를 새로 만들 때만 apply 시 -var로 create를 준다"
+  type        = string
+  default     = "validate"
+
+  validation {
+    condition     = contains(["validate", "create"], var.be_ddl_auto)
+    error_message = "be_ddl_auto는 validate 또는 create만 허용한다."
+  }
 }
 
 variable "be_container_port" {
@@ -50,18 +61,6 @@ variable "be_health_check_path" {
   description = "ALB가 태스크 상태를 확인하는 경로. DB 연결 상태도 함께 반영된다"
   type        = string
   default     = "/actuator/health"
-}
-
-variable "be_ai_http_url" {
-  description = "BE가 호출하는 AI HTTP 주소. 서울에 AI가 없어 기동만 되도록 연결되지 않는 자리표시 값을 둔다"
-  type        = string
-  default     = "http://ai.invalid:8001"
-}
-
-variable "be_ai_websocket_url" {
-  description = "BE가 연결하는 AI WebSocket 주소. be_ai_http_url과 같은 이유로 자리표시 값을 둔다"
-  type        = string
-  default     = "ws://ai.invalid:8000/v1/live-meeting"
 }
 
 variable "be_kakao_redirect_uri" {
@@ -146,4 +145,28 @@ variable "fe_health_check_path" {
   description = "ALB가 FE 상태를 확인하는 경로 (V1 컨테이너 헬스 체크와 같은 경로)"
   type        = string
   default     = "/api/health"
+}
+
+variable "ai_ami_id" {
+  description = "AI 인스턴스 AMI. FE와 같은 Ubuntu 26.04 amd64 (AI 이미지가 amd64 전용). 새 AMI로 바꾸면 인스턴스가 교체된다"
+  type        = string
+  default     = "ami-0e677ebf2c8434c2a"
+}
+
+variable "ai_instance_type" {
+  description = "AI 인스턴스 타입. V1 dev AI와 같은 t3.micro이며, 목업 기준이라 실제 공급자 사용 시 다시 검토한다"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "ai_root_volume_size" {
+  description = "AI 인스턴스 루트 볼륨 크기(GB)"
+  type        = number
+  default     = 20
+}
+
+variable "ai_image" {
+  description = "AI 컨테이너 이미지. V1 dev와 같은 AI 7856b5b 커밋의 amd64 이미지를 digest로 고정한다"
+  type        = string
+  default     = "devkyulim/meety-ai@sha256:93f5ee4d83376fcb3add2df48503e33ea3c8cc67e5923bb94cd0ffb1fc2acf09"
 }

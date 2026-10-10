@@ -1,4 +1,4 @@
-# staging BE 서비스. 지금은 경로 검증용 nginx를 띄우고, BE 배포 시(10/10) 이미지와 값을 바꾼다.
+# staging BE 서비스. BE 이미지를 staging profile로 실행한다.
 
 resource "aws_cloudwatch_log_group" "be" {
   name              = "/ecs/${local.name_prefix}/be"
@@ -16,6 +16,7 @@ resource "aws_ecs_task_definition" "be" {
   cpu                      = var.be_cpu
   memory                   = var.be_memory
   execution_role_arn       = aws_iam_role.ecs_execution.arn
+  task_role_arn            = aws_iam_role.be_task.arn
 
   runtime_platform {
     operating_system_family = "LINUX"
@@ -31,6 +32,37 @@ resource "aws_ecs_task_definition" "be" {
       containerPort = var.be_container_port
       protocol      = "tcp"
     }]
+
+    # 비밀값이 아닌 설정. DB와 Redis 주소는 DB 인스턴스의 private IP를 참조한다
+    environment = [
+      { name = "SPRING_PROFILES_ACTIVE", value = "staging" },
+      # staging profile의 ddl-auto create는 기동할 때마다 테이블을 다시 만든다.
+      # 첫 기동에서 스키마를 만든 뒤에는 validate로 덮어써 데이터를 유지하고, 엔티티와 스키마 차이는 기동 실패로 드러나게 한다
+      { name = "SPRING_JPA_HIBERNATE_DDL_AUTO", value = "validate" },
+      { name = "DB_HOST", value = aws_instance.db.private_ip },
+      { name = "DB_PORT", value = "3306" },
+      { name = "REDIS_HOST", value = aws_instance.db.private_ip },
+      { name = "REDIS_PORT", value = "6379" },
+      { name = "KAKAO_REDIRECT_URI", value = var.be_kakao_redirect_uri },
+      { name = "CORS_ALLOWED_ORIGINS", value = join(",", var.fe_allowed_origins) },
+      { name = "AI_HTTP_URL", value = var.be_ai_http_url },
+      { name = "AI_WEBSOCKET_URL", value = var.be_ai_websocket_url },
+      { name = "AWS_S3_BUCKET", value = aws_s3_bucket.files.bucket },
+      { name = "AWS_S3_REGION", value = var.region },
+    ]
+
+    # 비밀값은 태스크가 시작할 때 ECS가 Parameter Store에서 읽어 넣는다 (실행 역할 권한).
+    # BE는 DB_USERNAME을 읽고, Parameter Store 이름은 DB 인스턴스와 같은 DB_USER를 쓴다
+    secrets = [
+      { name = "DB_NAME", valueFrom = "${local.param_arn_prefix}/db/DB_NAME" },
+      { name = "DB_USERNAME", valueFrom = "${local.param_arn_prefix}/db/DB_USER" },
+      { name = "DB_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/DB_PASSWORD" },
+      { name = "REDIS_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/REDIS_PASSWORD" },
+      { name = "JWT_SECRET", valueFrom = "${local.param_arn_prefix}/be/JWT_SECRET" },
+      { name = "KAKAO_CLIENT_ID", valueFrom = "${local.param_arn_prefix}/be/KAKAO_CLIENT_ID" },
+      { name = "KAKAO_CLIENT_SECRET", valueFrom = "${local.param_arn_prefix}/be/KAKAO_CLIENT_SECRET" },
+      { name = "KAKAO_ADMIN_KEY", valueFrom = "${local.param_arn_prefix}/be/KAKAO_ADMIN_KEY" },
+    ]
 
     logConfiguration = {
       logDriver = "awslogs"
@@ -82,8 +114,9 @@ resource "aws_ecs_service" "be" {
     rollback = true
   }
 
-  # 태스크가 뜨고 헬스체크를 시작하기까지 기다리는 시간 (BE는 기동이 길어 배포 시 늘린다)
-  health_check_grace_period_seconds = 60
+  # 태스크가 뜨고 헬스체크 실패를 세기 시작하기까지 기다리는 시간.
+  # 첫 기동은 넉넉히 두고, 로그로 실제 기동 시간을 잰 뒤 줄인다
+  health_check_grace_period_seconds = 180
 
   # 서비스 태그(Service=meety 등)를 태스크에도 붙인다. default_tags는 태스크에 자동으로 붙지 않는다
   enable_ecs_managed_tags = true

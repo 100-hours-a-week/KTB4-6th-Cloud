@@ -23,9 +23,20 @@ variable "be_domain" {
 }
 
 variable "be_image" {
-  description = "BE 컨테이너 이미지. BE 41bf6a9 커밋의 amd64 이미지를 digest로 고정한다"
+  description = "BE 컨테이너 이미지. V1 dev와 같은 BE 131f245 커밋의 amd64 이미지를 digest로 고정한다"
   type        = string
-  default     = "devkyulim/meety-be@sha256:7f284d3be4e7c964b9ba1e5523e3071b5c5566f38a4af115904721daaddee8a5"
+  default     = "devkyulim/meety-be@sha256:b6ce5a4d6ee9c607a3bd561663cfa16a21eac06acce004fe3ce6cca99fd55fc2"
+}
+
+variable "be_ddl_auto" {
+  description = "BE의 ddl-auto 값. 평소에는 validate로 두고, 빈 staging DB에 스키마를 새로 만들 때만 apply 시 -var로 create를 준다"
+  type        = string
+  default     = "validate"
+
+  validation {
+    condition     = contains(["validate", "create"], var.be_ddl_auto)
+    error_message = "be_ddl_auto는 validate 또는 create만 허용한다."
+  }
 }
 
 variable "be_container_port" {

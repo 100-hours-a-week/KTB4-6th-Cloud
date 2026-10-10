@@ -129,3 +129,21 @@ variable "fe_allowed_origins" {
   type        = list(string)
   default     = ["https://staging.meety.io.kr", "http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"]
 }
+
+variable "fe_domain" {
+  description = "staging FE 도메인. ALB에서 이 도메인으로 온 요청을 FE 인스턴스로 보낸다"
+  type        = string
+  default     = "staging.meety.io.kr"
+}
+
+variable "fe_container_port" {
+  description = "FE 컨테이너(Next.js)가 요청을 받는 포트"
+  type        = number
+  default     = 3000
+}
+
+variable "fe_health_check_path" {
+  description = "ALB가 FE 상태를 확인하는 경로 (V1 컨테이너 헬스 체크와 같은 경로)"
+  type        = string
+  default     = "/api/health"
+}

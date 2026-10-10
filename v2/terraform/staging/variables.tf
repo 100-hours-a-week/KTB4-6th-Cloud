@@ -158,3 +158,27 @@ variable "fe_health_check_path" {
   type        = string
   default     = "/api/health"
 }
+
+variable "ai_ami_id" {
+  description = "AI 인스턴스 AMI. FE와 같은 Ubuntu 26.04 amd64 (AI 이미지가 amd64 전용). 새 AMI로 바꾸면 인스턴스가 교체된다"
+  type        = string
+  default     = "ami-0e677ebf2c8434c2a"
+}
+
+variable "ai_instance_type" {
+  description = "AI 인스턴스 타입. V1 dev AI와 같은 t3.micro이며, 목업 기준이라 실제 공급자 사용 시 다시 검토한다"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "ai_root_volume_size" {
+  description = "AI 인스턴스 루트 볼륨 크기(GB)"
+  type        = number
+  default     = 20
+}
+
+variable "ai_image" {
+  description = "AI 컨테이너 이미지. V1 dev와 같은 AI 7856b5b 커밋의 amd64 이미지를 digest로 고정한다"
+  type        = string
+  default     = "devkyulim/meety-ai@sha256:93f5ee4d83376fcb3add2df48503e33ea3c8cc67e5923bb94cd0ffb1fc2acf09"
+}

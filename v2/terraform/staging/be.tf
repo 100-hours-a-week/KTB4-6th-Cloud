@@ -36,6 +36,9 @@ resource "aws_ecs_task_definition" "be" {
     # 비밀값이 아닌 설정. DB와 Redis 주소는 DB 인스턴스의 private IP를 참조한다
     environment = [
       { name = "SPRING_PROFILES_ACTIVE", value = "staging" },
+      # staging profile의 ddl-auto create는 기동할 때마다 테이블을 다시 만든다.
+      # 첫 기동에서 스키마를 만든 뒤에는 validate로 덮어써 데이터를 유지하고, 엔티티와 스키마 차이는 기동 실패로 드러나게 한다
+      { name = "SPRING_JPA_HIBERNATE_DDL_AUTO", value = "validate" },
       { name = "DB_HOST", value = aws_instance.db.private_ip },
       { name = "DB_PORT", value = "3306" },
       { name = "REDIS_HOST", value = aws_instance.db.private_ip },

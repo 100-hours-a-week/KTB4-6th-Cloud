@@ -5,7 +5,10 @@ resource "aws_lb_target_group" "be" {
   vpc_id      = local.shared.vpc_id
   target_type = "ip" # Fargate 태스크는 IP로 등록된다
   protocol    = "HTTP"
-  port        = var.be_container_port
+
+  # ECS가 태스크를 등록할 때 컨테이너 포트(var.be_container_port)를 함께 지정하므로 실제 트래픽과 헬스 체크는 그 포트로 간다.
+  # 이 값은 바꾸면 대상 그룹이 교체되어 처음 만든 값(80)으로 고정한다.
+  port = 80
 
   # 태스크를 내릴 때 진행 중인 요청을 마칠 시간. 기본값 300초는 배포를 늦춘다
   deregistration_delay = 30

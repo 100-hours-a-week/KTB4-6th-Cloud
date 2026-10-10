@@ -22,35 +22,52 @@ variable "be_domain" {
   default     = "api-staging.meety.io.kr"
 }
 
-# 아래 값은 오늘 테스트 컨테이너(nginx) 기준이다. BE를 배포할 때(10/10) BE 값으로 바꾼다.
 variable "be_image" {
-  description = "BE 컨테이너 이미지 (지금은 경로 검증용 nginx)"
+  description = "BE 컨테이너 이미지. BE 41bf6a9 커밋의 amd64 이미지를 digest로 고정한다"
   type        = string
-  default     = "nginx:1.29.1-alpine"
+  default     = "devkyulim/meety-be@sha256:7f284d3be4e7c964b9ba1e5523e3071b5c5566f38a4af115904721daaddee8a5"
 }
 
 variable "be_container_port" {
-  description = "컨테이너가 요청을 받는 포트 (nginx 80, BE는 배포 시 변경)"
+  description = "BE 컨테이너가 요청을 받는 포트 (Spring Boot 기본값)"
   type        = number
-  default     = 80
+  default     = 8080
 }
 
 variable "be_cpu" {
-  description = "태스크 CPU 단위 (1024 = 1 vCPU). 테스트는 최소값, BE는 설계값 1024"
+  description = "태스크 CPU 단위 (1024 = 1 vCPU). ECS 설계 초기값이며 부하 실측 전이다"
   type        = number
-  default     = 256
+  default     = 1024
 }
 
 variable "be_memory" {
-  description = "태스크 메모리 MiB. 테스트는 최소값, BE는 설계값 2048"
+  description = "태스크 메모리 MiB. ECS 설계 초기값이며 부하 실측 전이다"
   type        = number
-  default     = 512
+  default     = 2048
 }
 
 variable "be_health_check_path" {
-  description = "ALB가 태스크 상태를 확인하는 경로"
+  description = "ALB가 태스크 상태를 확인하는 경로. DB 연결 상태도 함께 반영된다"
   type        = string
-  default     = "/"
+  default     = "/actuator/health"
+}
+
+variable "be_ai_http_url" {
+  description = "BE가 호출하는 AI HTTP 주소. 서울에 AI가 없어 기동만 되도록 연결되지 않는 자리표시 값을 둔다"
+  type        = string
+  default     = "http://ai.invalid:8001"
+}
+
+variable "be_ai_websocket_url" {
+  description = "BE가 연결하는 AI WebSocket 주소. be_ai_http_url과 같은 이유로 자리표시 값을 둔다"
+  type        = string
+  default     = "ws://ai.invalid:8000/v1/live-meeting"
+}
+
+variable "be_kakao_redirect_uri" {
+  description = "카카오 로그인 redirect URI. 카카오 콘솔에 등록한 값과 같아야 한다"
+  type        = string
+  default     = "https://staging.meety.io.kr/api/auth/kakao/callback"
 }
 
 variable "log_retention_days" {
@@ -108,7 +125,7 @@ variable "db_redis_image" {
 }
 
 variable "fe_allowed_origins" {
-  description = "staging FE 주소(origin) 목록. 파일 버킷 CORS에 쓴다. 로컬 FE에서 staging BE를 붙여 시험할 수 있게 localhost도 둔다"
+  description = "staging FE 주소(origin) 목록. 파일 버킷 CORS와 BE CORS에 쓴다. 로컬 FE에서 staging BE를 붙여 시험할 수 있게 localhost도 둔다"
   type        = list(string)
   default     = ["https://staging.meety.io.kr", "http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"]
 }

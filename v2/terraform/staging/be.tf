@@ -10,7 +10,11 @@ resource "aws_cloudwatch_log_group" "be" {
 }
 
 resource "aws_ecs_task_definition" "be" {
-  family                   = "${local.name_prefix}-be"
+  family = "${local.name_prefix}-be"
+
+  # 설정이 바뀌어 새 리비전을 만들 때 이전 리비전을 지우지(INACTIVE) 않는다.
+  # 서비스가 아직 이전 리비전으로 실행 중일 수 있고, 롤백할 때 이전 리비전이 필요하다
+  skip_destroy             = true
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = var.be_cpu
@@ -27,6 +31,9 @@ resource "aws_ecs_task_definition" "be" {
     name      = "be"
     image     = var.be_image
     essential = true
+
+    # 종료 신호(SIGTERM)를 받은 뒤 강제 종료까지 기다리는 시간. Fargate 최대값으로 두어 진행 중인 처리를 마칠 시간을 준다
+    stopTimeout = 120
 
     portMappings = [{
       containerPort = var.be_container_port
@@ -120,9 +127,23 @@ resource "aws_ecs_service" "be" {
     target_group_arn = aws_lb_target_group.be.arn
     container_name   = "be"
     container_port   = var.be_container_port
+
+    # 블루/그린 배포: 새 버전을 다른 대상 그룹에 띄우고, 전달 규칙의 가중치를 바꿔 트래픽을 넘긴다
+    advanced_configuration {
+      alternate_target_group_arn = aws_lb_target_group.be_green.arn
+      production_listener_rule   = aws_lb_listener_rule.be.arn
+      role_arn                   = aws_iam_role.ecs_infrastructure.arn
+    }
   }
 
-  # 배포할 때 새 태스크를 먼저 띄우고, 헬스체크를 통과하면 기존 태스크를 내린다
+  # 블루/그린 배포. 새 버전이 헬스체크를 통과하면 트래픽을 한 번에 넘기고,
+  # 관찰 시간 동안 이전 버전 태스크를 유지한다. 이전 태스크에 연결된 녹음 WebSocket과 SSE는 그대로 이어진다(10/11 실측).
+  # 관찰 시간은 회의 최대 시간(90분)보다 길게 둬서 배포 직전에 시작한 회의도 끊기지 않게 한다
+  deployment_configuration {
+    strategy             = "BLUE_GREEN"
+    bake_time_in_minutes = var.be_bake_time_minutes
+  }
+
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
 

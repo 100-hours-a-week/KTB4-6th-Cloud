@@ -63,6 +63,12 @@ variable "be_health_check_path" {
   default     = "/actuator/health"
 }
 
+variable "be_bake_time_minutes" {
+  description = "블루/그린 배포에서 트래픽을 넘긴 뒤 이전 버전 태스크를 유지하는 시간(분). 회의 최대 시간(90분)보다 길게 둔다"
+  type        = number
+  default     = 95
+}
+
 variable "be_kakao_redirect_uri" {
   description = "카카오 로그인 redirect URI. 카카오 콘솔에 등록한 값과 같아야 한다"
   type        = string

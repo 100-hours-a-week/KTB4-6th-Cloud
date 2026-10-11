@@ -252,3 +252,26 @@ resource "aws_iam_instance_profile" "ai" {
     Name = "${local.name_prefix}-ai"
   }
 }
+
+# ECS 인프라 역할: 블루/그린 배포 때 ECS가 전달 규칙의 가중치를 바꾸고 대상 그룹에 태스크를 등록하는 데 쓴다
+resource "aws_iam_role" "ecs_infrastructure" {
+  name = "${local.name_prefix}-ecs-infrastructure"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ecs.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-ecs-infrastructure"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_infrastructure" {
+  role       = aws_iam_role.ecs_infrastructure.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonECSInfrastructureRolePolicyForLoadBalancers"
+}

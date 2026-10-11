@@ -26,6 +26,30 @@ resource "aws_lb_target_group" "be" {
   }
 }
 
+# 블루/그린 배포용 두 번째 BE 대상 그룹. 설정은 위 대상 그룹과 같다.
+# 배포 때마다 ECS가 새 버전을 비어 있는 쪽 대상 그룹에 띄우고, 전달 규칙의 가중치를 바꿔 트래픽을 넘긴다
+resource "aws_lb_target_group" "be_green" {
+  name        = "${local.name_prefix}-be-tg-green"
+  vpc_id      = local.shared.vpc_id
+  target_type = "ip"
+  protocol    = "HTTP"
+  port        = 80
+
+  deregistration_delay = 30
+
+  health_check {
+    path                = var.be_health_check_path
+    matcher             = "200-399"
+    interval            = 15
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-be-tg-green"
+  }
+}
+
 # api-staging.meety.io.kr 로 온 HTTPS 요청 → staging BE
 resource "aws_lb_listener_rule" "be" {
   listener_arn = local.shared.https_listener_arn
@@ -37,9 +61,26 @@ resource "aws_lb_listener_rule" "be" {
     }
   }
 
+  # 두 대상 그룹을 가중치로 연결해 두고, 배포 때 ECS가 가중치를 바꾼다
   action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.be.arn
+    type = "forward"
+
+    forward {
+      target_group {
+        arn    = aws_lb_target_group.be.arn
+        weight = 100
+      }
+
+      target_group {
+        arn    = aws_lb_target_group.be_green.arn
+        weight = 0
+      }
+    }
+  }
+
+  # 배포 후 가중치는 ECS가 관리한다. Terraform이 처음 값으로 되돌리면 이전 버전으로 트래픽이 넘어간다
+  lifecycle {
+    ignore_changes = [action]
   }
 
   tags = {

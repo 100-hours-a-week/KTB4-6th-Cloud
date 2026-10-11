@@ -175,6 +175,12 @@ variable "fe_container_port" {
   default     = 3000
 }
 
+variable "fe_standby_port" {
+  description = "FE 무중단 배포 때 새 컨테이너를 띄우는 두 번째 포트. fe_container_port와 번갈아 쓴다"
+  type        = number
+  default     = 3001
+}
+
 variable "fe_health_check_path" {
   description = "ALB가 FE 상태를 확인하는 경로 (V1 컨테이너 헬스 체크와 같은 경로)"
   type        = string
@@ -213,3 +219,12 @@ variable "gha_deploy_subjects" {
     "repo:100-hours-a-week@167328634/KTB4-6th-BE@1344634945:environment:v2-staging-migration-approval",
   ]
 }
+
+variable "gha_deploy_fe_subjects" {
+  description = "staging FE 배포 역할을 쓸 수 있는 GitHub Actions 실행 위치 (저장소와 GitHub Environment)"
+  type        = list(string)
+  default = [
+    "repo:100-hours-a-week@167328634/KTB4-6th-FE@1344634298:environment:v2-staging",
+  ]
+}
+

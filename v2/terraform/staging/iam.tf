@@ -357,3 +357,69 @@ resource "aws_iam_role_policy" "gha_deploy" {
     ]
   })
 }
+
+# FE GitHub Actions 배포 역할: FE 저장소의 v2-staging Environment에서 실행될 때만 쓸 수 있다.
+# FE 인스턴스에 배포 명령을 보내고, FE 대상 그룹에 등록하는 포트를 바꾸는 권한만 준다
+resource "aws_iam_role" "gha_deploy_fe" {
+  name = "${local.name_prefix}-gha-deploy-fe"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn }
+      Action    = ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = var.gha_deploy_fe_subjects
+        }
+      }
+    }]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-gha-deploy-fe"
+  }
+}
+
+resource "aws_iam_role_policy" "gha_deploy_fe" {
+  name = "deploy-fe"
+  role = aws_iam_role.gha_deploy_fe.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # staging FE 인스턴스에만, 셸 명령 문서로만 명령을 보낼 수 있다
+        Sid    = "SendCommandToFe"
+        Effect = "Allow"
+        Action = "ssm:SendCommand"
+        Resource = [
+          aws_instance.fe.arn,
+          "arn:aws:ssm:${var.region}::document/AWS-RunShellScript",
+        ]
+      },
+      {
+        Sid      = "ReadCommandResult"
+        Effect   = "Allow"
+        Action   = "ssm:GetCommandInvocation"
+        Resource = "*"
+      },
+      {
+        Sid      = "SwitchFeTarget"
+        Effect   = "Allow"
+        Action   = ["elasticloadbalancing:RegisterTargets", "elasticloadbalancing:DeregisterTargets"]
+        Resource = aws_lb_target_group.fe.arn
+      },
+      {
+        # 대상 그룹 이름으로 ARN 찾기와 대상 상태 조회는 리소스 단위로 제한할 수 없다
+        Sid      = "ReadTargets"
+        Effect   = "Allow"
+        Action   = ["elasticloadbalancing:DescribeTargetGroups", "elasticloadbalancing:DescribeTargetHealth"]
+        Resource = "*"
+      },
+    ]
+  })
+}
+

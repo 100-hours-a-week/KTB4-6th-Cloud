@@ -61,6 +61,16 @@ resource "aws_vpc_security_group_ingress_rule" "fe_from_alb" {
   to_port                      = var.fe_container_port
 }
 
+# FE 무중단 배포: 새 컨테이너를 다른 포트로 띄워 확인한 뒤 트래픽을 넘긴다. 두 포트를 번갈아 쓴다
+resource "aws_vpc_security_group_ingress_rule" "fe_standby_from_alb" {
+  security_group_id            = aws_security_group.fe.id
+  description                  = "FE app (deploy standby port) from ALB"
+  referenced_security_group_id = local.shared.alb_security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = var.fe_standby_port
+  to_port                      = var.fe_standby_port
+}
+
 # 패키지 설치, SSM 연결, NAT로 전달하는 트래픽이 인터넷으로 나간다
 resource "aws_vpc_security_group_egress_rule" "fe_all" {
   security_group_id = aws_security_group.fe.id

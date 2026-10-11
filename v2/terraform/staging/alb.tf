@@ -179,10 +179,15 @@ resource "aws_lb_target_group" "fe" {
   }
 }
 
-resource "aws_lb_target_group_attachment" "fe" {
-  target_group_arn = aws_lb_target_group.fe.arn
-  target_id        = aws_instance.fe.id
-  port             = var.fe_container_port
+# FE 인스턴스를 대상 그룹에 등록하는 일은 CI/CD가 맡는다.
+# 배포 때마다 새 컨테이너를 다른 포트(3000, 3001)로 띄우고 등록 포트를 바꾸므로 Terraform이 관리하지 않는다.
+# 처음 Terraform으로 등록한 3000번 대상은 그대로 두고 state에서만 뺀다
+removed {
+  from = aws_lb_target_group_attachment.fe
+
+  lifecycle {
+    destroy = false
+  }
 }
 
 # staging.meety.io.kr 로 온 HTTPS 요청 → staging FE

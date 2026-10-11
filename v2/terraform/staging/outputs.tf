@@ -37,3 +37,24 @@ output "ai_private_ip" {
   description = "staging AI 인스턴스 private IP. BE의 AI_HTTP_URL, AI_WEBSOCKET_URL에 쓴다"
   value       = aws_instance.ai.private_ip
 }
+
+output "gha_deploy_fe_role_name" {
+  description = "FE 저장소 v2-staging Environment의 AWS_ROLE_ARN에 넣을 역할 이름 (ARN은 aws iam get-role로 확인)"
+  value       = aws_iam_role.gha_deploy_fe.name
+}
+
+output "fe_target_group_name" {
+  description = "FE 배포 workflow가 대상을 등록하는 대상 그룹 이름"
+  value       = aws_lb_target_group.fe.name
+}
+
+output "gha_deploy_ai_role_name" {
+  description = "AI 저장소 v2-staging Environment의 AWS_ROLE_ARN에 넣을 역할 이름 (ARN은 aws iam get-role로 확인)"
+  value       = aws_iam_role.gha_deploy_ai.name
+}
+
+output "ai_instance_id" {
+  description = "AI 저장소 v2-staging Environment의 AI_INSTANCE_ID에 넣을 값"
+  value       = aws_instance.ai.id
+}
+

@@ -63,6 +63,40 @@ variable "be_health_check_path" {
   default     = "/actuator/health"
 }
 
+variable "be_bake_time_minutes" {
+  description = "블루/그린 배포에서 트래픽을 넘긴 뒤 이전 버전 태스크를 유지하는 시간(분). 회의 최대 시간(90분)보다 길게 둔다"
+  type        = number
+  default     = 95
+}
+
+variable "be_realtime_paths" {
+  description = "be-realtime으로 보낼 경로. 녹음 WebSocket, 회의 SSE, 알림 SSE (BE 코드 기준)"
+  type        = list(string)
+  default = [
+    "/ws/*",
+    "/api/v1/meetings/*/events",
+    "/api/v1/notifications/events",
+  ]
+}
+
+variable "be_api_min_count" {
+  description = "be-api 최소 태스크 수 (설계 추정값, 부하 테스트 후 조정)"
+  type        = number
+  default     = 2
+}
+
+variable "be_api_max_count" {
+  description = "be-api 최대 태스크 수 (설계 추정값, 부하 테스트 후 조정)"
+  type        = number
+  default     = 5
+}
+
+variable "be_api_cpu_target" {
+  description = "be-api 오토스케일링 목표 평균 CPU 사용률(%) (설계 추정값)"
+  type        = number
+  default     = 50
+}
+
 variable "be_kakao_redirect_uri" {
   description = "카카오 로그인 redirect URI. 카카오 콘솔에 등록한 값과 같아야 한다"
   type        = string
@@ -169,4 +203,13 @@ variable "ai_image" {
   description = "AI 컨테이너 이미지. V1 dev와 같은 AI 7856b5b 커밋의 amd64 이미지를 digest로 고정한다"
   type        = string
   default     = "devkyulim/meety-ai@sha256:93f5ee4d83376fcb3add2df48503e33ea3c8cc67e5923bb94cd0ffb1fc2acf09"
+}
+
+variable "gha_deploy_subjects" {
+  description = "staging BE 배포 역할을 쓸 수 있는 GitHub Actions 실행 위치 (저장소와 GitHub Environment). 이름이 바뀌어도 유지되는 ID 형식을 쓴다"
+  type        = list(string)
+  default = [
+    "repo:100-hours-a-week@167328634/KTB4-6th-BE@1344634945:environment:v2-staging",
+    "repo:100-hours-a-week@167328634/KTB4-6th-BE@1344634945:environment:v2-staging-migration-approval",
+  ]
 }

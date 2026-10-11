@@ -104,13 +104,23 @@ resource "aws_ecs_task_definition" "be" {
   }
 }
 
-resource "aws_ecs_service" "be" {
-  name            = "${local.name_prefix}-be"
+# BE는 같은 이미지와 태스크 정의로 서비스 2개를 띄운다. ALB가 경로로 나눠 보낸다 (alb.tf)
+# - be-realtime: 녹음 WebSocket, 회의 SSE, 알림 SSE. 연결 수에 따라 부하가 늘어난다
+# - be-api: 그 외 REST 요청. 요청 수(RPS)에 따라 부하가 늘어나 오토스케일링한다
+
+# 서비스 이름을 바꾸면 서비스가 다시 만들어진다(10/11 -be에서 -be-realtime으로 변경)
+moved {
+  from = aws_ecs_service.be
+  to   = aws_ecs_service.be_realtime
+}
+
+resource "aws_ecs_service" "be_realtime" {
+  name            = "${local.name_prefix}-be-realtime"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.be.arn
-  desired_count   = 1 # 실시간 기능(SSE, WebSocket)이 서버 메모리에 있어 1개로 운영
+  desired_count   = 1 # 연결이 서버 메모리에 있어 1개로 시작한다. 연결 수 기준 확장은 실측 후 정한다
 
-  # 실시간 기능을 포함하므로 On-Demand만 쓴다
+  # Spot이 회수되면 진행 중인 회의 연결이 끊기므로 On-Demand만 쓴다
   capacity_provider_strategy {
     capacity_provider = "FARGATE"
     base              = 1
@@ -124,14 +134,14 @@ resource "aws_ecs_service" "be" {
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.be.arn
+    target_group_arn = aws_lb_target_group.be_realtime.arn
     container_name   = "be"
     container_port   = var.be_container_port
 
     # 블루/그린 배포: 새 버전을 다른 대상 그룹에 띄우고, 전달 규칙의 가중치를 바꿔 트래픽을 넘긴다
     advanced_configuration {
-      alternate_target_group_arn = aws_lb_target_group.be_green.arn
-      production_listener_rule   = aws_lb_listener_rule.be.arn
+      alternate_target_group_arn = aws_lb_target_group.be_realtime_green.arn
+      production_listener_rule   = aws_lb_listener_rule.be_realtime.arn
       role_arn                   = aws_iam_role.ecs_infrastructure.arn
     }
   }
@@ -167,10 +177,100 @@ resource "aws_ecs_service" "be" {
   }
 
   # 전달 규칙이 먼저 있어야 대상 그룹이 ALB에 연결된 상태로 서비스를 만들 수 있다
-  depends_on = [aws_lb_listener_rule.be]
+  depends_on = [aws_lb_listener_rule.be_realtime]
 
   tags = {
-    Name = "${local.name_prefix}-be"
+    Name = "${local.name_prefix}-be-realtime"
+  }
+}
+
+resource "aws_ecs_service" "be_api" {
+  name            = "${local.name_prefix}-be-api"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.be.arn
+  desired_count   = var.be_api_min_count
+
+  # 최소 1개는 On-Demand로 두고, 늘어나는 몫은 On-Demand:Spot = 1:3으로 배치한다
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE"
+    base              = 1
+    weight            = 1
+  }
+
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 3
+  }
+
+  network_configuration {
+    subnets          = local.shared.public_subnet_ids
+    security_groups  = [aws_security_group.be.id]
+    assign_public_ip = true # NAT 없이 이미지 받기와 외부 API 호출을 하기 위해
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.be_api.arn
+    container_name   = "be"
+    container_port   = var.be_container_port
+  }
+
+  # 롤링 배포. 요청이 짧아서 새 태스크가 헬스체크를 통과한 뒤 기존 태스크를 내려도 끊기는 요청이 없다
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+
+  # 새 버전이 계속 실패하면 배포를 멈추고 이전 버전으로 되돌린다
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  health_check_grace_period_seconds = 180
+
+  enable_ecs_managed_tags = true
+  propagate_tags          = "SERVICE"
+
+  # 배포할 버전은 CI/CD가, 태스크 수는 오토스케일링이 정한다
+  lifecycle {
+    ignore_changes = [task_definition, desired_count]
+  }
+
+  depends_on = [aws_lb_listener_rule.be_api]
+
+  tags = {
+    Name = "${local.name_prefix}-be-api"
+  }
+}
+
+# be-api 오토스케일링: 평균 CPU 사용률을 목표값에 맞추도록 태스크 수를 조절한다
+resource "aws_appautoscaling_target" "be_api" {
+  service_namespace  = "ecs"
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.be_api.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  min_capacity       = var.be_api_min_count
+  max_capacity       = var.be_api_max_count
+
+  tags = {
+    Name = "${local.name_prefix}-be-api"
+  }
+}
+
+resource "aws_appautoscaling_policy" "be_api_cpu" {
+  name               = "${local.name_prefix}-be-api-cpu"
+  service_namespace  = aws_appautoscaling_target.be_api.service_namespace
+  resource_id        = aws_appautoscaling_target.be_api.resource_id
+  scalable_dimension = aws_appautoscaling_target.be_api.scalable_dimension
+  policy_type        = "TargetTrackingScaling"
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+
+    target_value = var.be_api_cpu_target
+
+    # 늘릴 때는 빨리, 줄일 때는 천천히 (설계값)
+    scale_out_cooldown = 60
+    scale_in_cooldown  = 300
   }
 }
 

@@ -8,9 +8,14 @@ output "ecs_cluster_arn" {
   value       = aws_ecs_cluster.main.arn
 }
 
-output "be_service_name" {
-  description = "staging BE ECS 서비스 이름"
-  value       = aws_ecs_service.be.name
+output "be_realtime_service_name" {
+  description = "staging BE 실시간 ECS 서비스 이름 (녹음 WebSocket, SSE)"
+  value       = aws_ecs_service.be_realtime.name
+}
+
+output "be_api_service_name" {
+  description = "staging BE REST ECS 서비스 이름"
+  value       = aws_ecs_service.be_api.name
 }
 
 output "private_subnet_ids" {

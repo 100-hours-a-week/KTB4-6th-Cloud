@@ -69,6 +69,34 @@ variable "be_bake_time_minutes" {
   default     = 95
 }
 
+variable "be_realtime_paths" {
+  description = "be-realtime으로 보낼 경로. 녹음 WebSocket, 회의 SSE, 알림 SSE (BE 코드 기준)"
+  type        = list(string)
+  default = [
+    "/ws/*",
+    "/api/v1/meetings/*/events",
+    "/api/v1/notifications/events",
+  ]
+}
+
+variable "be_api_min_count" {
+  description = "be-api 최소 태스크 수 (설계 추정값, 부하 테스트 후 조정)"
+  type        = number
+  default     = 2
+}
+
+variable "be_api_max_count" {
+  description = "be-api 최대 태스크 수 (설계 추정값, 부하 테스트 후 조정)"
+  type        = number
+  default     = 5
+}
+
+variable "be_api_cpu_target" {
+  description = "be-api 오토스케일링 목표 평균 CPU 사용률(%) (설계 추정값)"
+  type        = number
+  default     = 50
+}
+
 variable "be_kakao_redirect_uri" {
   description = "카카오 로그인 redirect URI. 카카오 콘솔에 등록한 값과 같아야 한다"
   type        = string

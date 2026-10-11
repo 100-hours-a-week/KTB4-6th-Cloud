@@ -329,7 +329,7 @@ resource "aws_iam_role_policy" "gha_deploy" {
         Sid      = "DeployBeService"
         Effect   = "Allow"
         Action   = ["ecs:UpdateService", "ecs:DescribeServices"]
-        Resource = aws_ecs_service.be.id
+        Resource = [aws_ecs_service.be_realtime.id, aws_ecs_service.be_api.id]
       },
       {
         # 배포 진행 상황 조회와, 관찰 시간 중 배포를 멈춰 이전 버전으로 되돌리기

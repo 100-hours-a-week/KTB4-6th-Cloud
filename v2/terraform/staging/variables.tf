@@ -194,9 +194,9 @@ variable "ai_ami_id" {
 }
 
 variable "ai_instance_type" {
-  description = "AI 인스턴스 타입. V1 dev AI와 같은 t3.micro이며, 목업 기준이라 실제 공급자 사용 시 다시 검토한다"
+  description = "AI 인스턴스 타입. 무중단 배포 때 신구 컨테이너 4개가 함께 떠야 해서 t3.small(2GB)로 둔다 (t3.micro는 목업 2개만으로 650MB 사용)"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.small"
 }
 
 variable "ai_root_volume_size" {
@@ -225,6 +225,14 @@ variable "gha_deploy_fe_subjects" {
   type        = list(string)
   default = [
     "repo:100-hours-a-week@167328634/KTB4-6th-FE@1344634298:environment:v2-staging",
+  ]
+}
+
+variable "gha_deploy_ai_subjects" {
+  description = "staging AI 배포 역할을 쓸 수 있는 GitHub Actions 실행 위치 (저장소와 GitHub Environment)"
+  type        = list(string)
+  default = [
+    "repo:100-hours-a-week@167328634/KTB4-6th-AI@1344635474:environment:v2-staging",
   ]
 }
 

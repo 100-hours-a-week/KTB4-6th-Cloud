@@ -193,7 +193,7 @@ resource "aws_iam_instance_profile" "db" {
   }
 }
 
-# AI 인스턴스 역할: SSM 접속과, 첫 부팅 때 BE와 공유하는 INTERNAL_API_KEY를 읽는 권한만 준다.
+# AI 인스턴스 역할: SSM 접속과, BE와 공유하는 INTERNAL_API_KEY, /meety/staging/ai/ 아래 공급자 키를 읽는 권한만 준다.
 resource "aws_iam_role" "ai" {
   name = "${local.name_prefix}-ai"
 
@@ -229,6 +229,13 @@ resource "aws_iam_role_policy" "ai_params" {
         Effect   = "Allow"
         Action   = "ssm:GetParameter"
         Resource = "${local.param_arn_prefix}/be/INTERNAL_API_KEY"
+      },
+      {
+        # 실제 공급자 키(Speechmatics, OpenRouter, Modal 등)
+        Sid      = "ReadAiParams"
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter", "ssm:GetParametersByPath"]
+        Resource = ["${local.param_arn_prefix}/ai", "${local.param_arn_prefix}/ai/*"]
       },
       {
         # SecureString 복호화는 Parameter Store를 거친 요청에만 허용한다
@@ -417,6 +424,58 @@ resource "aws_iam_role_policy" "gha_deploy_fe" {
         Sid      = "ReadTargets"
         Effect   = "Allow"
         Action   = ["elasticloadbalancing:DescribeTargetGroups", "elasticloadbalancing:DescribeTargetHealth"]
+        Resource = "*"
+      },
+    ]
+  })
+}
+
+# AI GitHub Actions 배포 역할: AI 저장소의 v2-staging Environment에서 실행될 때만 쓸 수 있다.
+# AI 인스턴스에 배포 명령을 보내는 권한만 준다. 공급자 키는 인스턴스가 자기 역할로 직접 읽는다
+resource "aws_iam_role" "gha_deploy_ai" {
+  name = "${local.name_prefix}-gha-deploy-ai"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn }
+      Action    = ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = var.gha_deploy_ai_subjects
+        }
+      }
+    }]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-gha-deploy-ai"
+  }
+}
+
+resource "aws_iam_role_policy" "gha_deploy_ai" {
+  name = "deploy-ai"
+  role = aws_iam_role.gha_deploy_ai.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # staging AI 인스턴스에만, 셸 명령 문서로만 명령을 보낼 수 있다
+        Sid    = "SendCommandToAi"
+        Effect = "Allow"
+        Action = "ssm:SendCommand"
+        Resource = [
+          aws_instance.ai.arn,
+          "arn:aws:ssm:${var.region}::document/AWS-RunShellScript",
+        ]
+      },
+      {
+        Sid      = "ReadCommandResult"
+        Effect   = "Allow"
+        Action   = "ssm:GetCommandInvocation"
         Resource = "*"
       },
     ]

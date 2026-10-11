@@ -48,3 +48,13 @@ output "fe_target_group_name" {
   value       = aws_lb_target_group.fe.name
 }
 
+output "gha_deploy_ai_role_name" {
+  description = "AI 저장소 v2-staging Environment의 AWS_ROLE_ARN에 넣을 역할 이름 (ARN은 aws iam get-role로 확인)"
+  value       = aws_iam_role.gha_deploy_ai.name
+}
+
+output "ai_instance_id" {
+  description = "AI 저장소 v2-staging Environment의 AI_INSTANCE_ID에 넣을 값"
+  value       = aws_instance.ai.id
+}
+

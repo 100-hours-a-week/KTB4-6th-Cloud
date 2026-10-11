@@ -176,3 +176,12 @@ variable "ai_image" {
   type        = string
   default     = "devkyulim/meety-ai@sha256:93f5ee4d83376fcb3add2df48503e33ea3c8cc67e5923bb94cd0ffb1fc2acf09"
 }
+
+variable "gha_deploy_subjects" {
+  description = "staging BE 배포 역할을 쓸 수 있는 GitHub Actions 실행 위치 (저장소와 GitHub Environment). 이름이 바뀌어도 유지되는 ID 형식을 쓴다"
+  type        = list(string)
+  default = [
+    "repo:100-hours-a-week@167328634/KTB4-6th-BE@1344634945:environment:v2-staging",
+    "repo:100-hours-a-week@167328634/KTB4-6th-BE@1344634945:environment:v2-staging-migration-approval",
+  ]
+}

@@ -275,3 +275,85 @@ resource "aws_iam_role_policy_attachment" "ecs_infrastructure" {
   role       = aws_iam_role.ecs_infrastructure.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonECSInfrastructureRolePolicyForLoadBalancers"
 }
+
+# GitHub Actions 배포 역할: BE 저장소의 지정한 GitHub Environment에서 실행될 때만 쓸 수 있다.
+# 새 태스크 정의를 등록하고 staging BE 서비스에 배포하는 권한만 준다. DB, Terraform, 다른 서비스 권한은 없다
+resource "aws_iam_role" "gha_deploy" {
+  name = "${local.name_prefix}-gha-deploy"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn }
+      Action    = ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = var.gha_deploy_subjects
+        }
+      }
+    }]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-gha-deploy"
+  }
+}
+
+resource "aws_iam_role_policy" "gha_deploy" {
+  name = "deploy-be"
+  role = aws_iam_role.gha_deploy.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # 태스크 정의 조회와 등록은 리소스 단위로 제한할 수 없다
+        Sid      = "RegisterTaskDefinition"
+        Effect   = "Allow"
+        Action   = ["ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition"]
+        Resource = "*"
+      },
+      {
+        # 등록하는 태스크 정의에 Service=meety 등 태그를 붙일 때만 허용한다
+        Sid      = "TagOnRegister"
+        Effect   = "Allow"
+        Action   = "ecs:TagResource"
+        Resource = "*"
+        Condition = {
+          StringEquals = { "ecs:CreateAction" = "RegisterTaskDefinition" }
+        }
+      },
+      {
+        Sid      = "DeployBeService"
+        Effect   = "Allow"
+        Action   = ["ecs:UpdateService", "ecs:DescribeServices"]
+        Resource = aws_ecs_service.be.id
+      },
+      {
+        # 배포 진행 상황 조회와, 관찰 시간 중 배포를 멈춰 이전 버전으로 되돌리기
+        Sid      = "ServiceDeployments"
+        Effect   = "Allow"
+        Action   = ["ecs:ListServiceDeployments", "ecs:DescribeServiceDeployments", "ecs:StopServiceDeployment"]
+        Resource = "*"
+      },
+      {
+        # 새 태스크 정의에 들어가는 실행 역할과 태스크 역할을 ECS에 넘길 때만 허용한다
+        Sid      = "PassTaskRoles"
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
+        Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.be_task.arn]
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
+        }
+      },
+      {
+        Sid      = "ReadTaskTemplate"
+        Effect   = "Allow"
+        Action   = "ssm:GetParameter"
+        Resource = aws_ssm_parameter.be_task_template.arn
+      },
+    ]
+  })
+}

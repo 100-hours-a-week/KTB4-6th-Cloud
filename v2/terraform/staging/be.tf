@@ -161,10 +161,27 @@ resource "aws_ecs_service" "be" {
   enable_ecs_managed_tags = true
   propagate_tags          = "SERVICE"
 
+  # 배포할 버전(태스크 정의)은 CI/CD가 정한다. Terraform이 CI/CD가 배포한 버전을 되돌리지 않게 한다
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
   # 전달 규칙이 먼저 있어야 대상 그룹이 ALB에 연결된 상태로 서비스를 만들 수 있다
   depends_on = [aws_lb_listener_rule.be]
 
   tags = {
     Name = "${local.name_prefix}-be"
+  }
+}
+
+# CI/CD가 새 버전을 등록할 때 기준으로 삼는 태스크 정의.
+# CI/CD는 이 정의에서 이미지만 바꿔 등록하므로, Terraform에서 바꾼 환경변수와 리소스 설정이 다음 배포에 반영된다
+resource "aws_ssm_parameter" "be_task_template" {
+  name  = "/meety/${var.env}/be/deploy/TASK_TEMPLATE_ARN"
+  type  = "String"
+  value = aws_ecs_task_definition.be.arn
+
+  tags = {
+    Name = "${local.name_prefix}-be-task-template"
   }
 }

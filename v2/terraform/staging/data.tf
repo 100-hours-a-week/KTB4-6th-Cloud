@@ -19,3 +19,8 @@ data "aws_caller_identity" "current" {}
 data "aws_kms_alias" "ssm" {
   name = "alias/aws/ssm"
 }
+
+# GitHub Actions OIDC provider. 계정에 하나만 둘 수 있어 V1에서 만든 것을 읽기만 한다
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+}

@@ -16,6 +16,18 @@ variable "vpc_cidr" {
   default     = "10.1.0.0/16"
 }
 
+variable "v1_region" {
+  description = "V1 리전. V1 VPC와 피어링할 때 쓴다"
+  type        = string
+  default     = "us-east-2"
+}
+
+variable "v1_vpc_id" {
+  description = "V1 VPC ID. V1에서 V2로 DB를 복제하기 위해 피어링한다"
+  type        = string
+  default     = "vpc-0cd787f082879815e"
+}
+
 variable "azs" {
   description = "서브넷을 만들 가용 영역. ALB는 2개 이상이 필요하다"
   type        = list(string)
@@ -26,4 +38,10 @@ variable "staging_domains" {
   description = "V2 staging 인증서에 넣을 도메인. 첫 번째가 대표 이름이다 (BE, FE 순서)"
   type        = list(string)
   default     = ["api-staging.meety.io.kr", "staging.meety.io.kr"]
+}
+
+variable "dev_domains" {
+  description = "V1 dev 이전 리허설 인증서에 넣을 도메인. 첫 번째가 대표 이름이다 (BE, FE 순서)"
+  type        = list(string)
+  default     = ["api-dev.meety.io.kr", "dev.meety.io.kr"]
 }

@@ -15,3 +15,21 @@ resource "aws_acm_certificate" "staging" {
     Name = "${local.name_prefix}-staging-cert"
   }
 }
+
+# V1 dev 도메인을 서울로 옮기는 이전 리허설용 HTTPS 인증서 (ACM, DNS 검증)
+# - staging 인증서에 도메인을 추가하면 인증서가 새로 발급되므로 별도 인증서로 만든다.
+# - 검증용 CNAME은 staging과 같이 외부 DNS(가비아)에 직접 추가한다 (output 참고).
+# - ALB 리스너에는 발급이 끝난 뒤 aws_lb_listener_certificate로 붙인다.
+resource "aws_acm_certificate" "dev" {
+  domain_name               = var.dev_domains[0]
+  subject_alternative_names = slice(var.dev_domains, 1, length(var.dev_domains))
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-dev-cert"
+  }
+}

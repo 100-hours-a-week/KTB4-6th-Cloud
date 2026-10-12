@@ -13,3 +13,19 @@ provider "aws" {
     }
   }
 }
+
+# V1 리전(오하이오). V1 VPC와의 피어링 수락처럼 오하이오 쪽에 만들어야 하는 리소스에만 쓴다.
+provider "aws" {
+  alias  = "v1"
+  region = var.v1_region
+
+  default_tags {
+    tags = {
+      Service   = "meety"
+      Project   = var.project
+      Version   = "v2"
+      Env       = "shared"
+      ManagedBy = "terraform"
+    }
+  }
+}

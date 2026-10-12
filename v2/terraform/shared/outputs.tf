@@ -51,3 +51,24 @@ output "staging_cert_arn" {
   description = "V2 staging 인증서 ARN (ALB HTTPS 리스너에서 사용)"
   value       = aws_acm_certificate.staging.arn
 }
+
+output "v1_peering_connection_id" {
+  description = "V1 VPC와의 피어링 ID. staging/의 서울 경로와 V1 코드의 오하이오 경로에서 쓴다"
+  value       = aws_vpc_peering_connection_accepter.v1.id
+}
+
+output "dev_cert_validation_records" {
+  description = "외부 DNS에 추가할 dev 인증서 검증용 CNAME (이름, 값)"
+  value = {
+    for o in aws_acm_certificate.dev.domain_validation_options : o.domain_name => {
+      type  = o.resource_record_type
+      name  = o.resource_record_name
+      value = o.resource_record_value
+    }
+  }
+}
+
+output "dev_cert_arn" {
+  description = "V1 dev 이전 리허설 인증서 ARN (발급 후 ALB HTTPS 리스너에 추가)"
+  value       = aws_acm_certificate.dev.arn
+}

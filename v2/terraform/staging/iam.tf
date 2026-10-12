@@ -99,7 +99,7 @@ resource "aws_iam_role_policy" "be_task_files" {
   })
 }
 
-# FE 인스턴스 역할: 지금은 SSM 접속에 필요한 권한만 준다.
+# FE 인스턴스 역할: SSM 접속과, FE 컨테이너를 띄울 때 /meety/staging/fe/ 아래 비밀값을 읽는 권한을 준다.
 resource "aws_iam_role" "fe" {
   name = "${local.name_prefix}-fe"
 
@@ -120,6 +120,34 @@ resource "aws_iam_role" "fe" {
 resource "aws_iam_role_policy_attachment" "fe_ssm" {
   role       = aws_iam_role.fe.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# 버그 리포트를 보내는 Discord webhook 주소 등. FE 서버 쪽에서 쓴다
+resource "aws_iam_role_policy" "fe_params" {
+  name = "read-fe-params"
+  role = aws_iam_role.fe.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ReadFeParams"
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter", "ssm:GetParametersByPath"]
+        Resource = ["${local.param_arn_prefix}/fe", "${local.param_arn_prefix}/fe/*"]
+      },
+      {
+        # SecureString 복호화는 Parameter Store를 거친 요청에만 허용한다
+        Sid      = "DecryptViaSsm"
+        Effect   = "Allow"
+        Action   = "kms:Decrypt"
+        Resource = data.aws_kms_alias.ssm.target_key_arn
+        Condition = {
+          StringEquals = { "kms:ViaService" = "ssm.${var.region}.amazonaws.com" }
+        }
+      },
+    ]
+  })
 }
 
 resource "aws_iam_instance_profile" "fe" {

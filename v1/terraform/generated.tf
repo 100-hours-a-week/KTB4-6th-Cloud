@@ -100,10 +100,14 @@ resource "aws_iam_policy" "params_read_server" {
   path        = "/"
   policy = jsonencode({
     Statement = [{
-      Action   = ["ssm:GetParametersByPath", "ssm:GetParameters", "ssm:GetParameter"]
-      Effect   = "Allow"
-      Resource = "arn:aws:ssm:us-east-2:${local.account_id}:parameter/meety/*"
-      Sid      = "ReadParams"
+      Action = ["ssm:GetParametersByPath", "ssm:GetParameters", "ssm:GetParameter"]
+      Effect = "Allow"
+      # dev 서버가 다른 환경의 파라미터를 읽지 않도록 dev 경로로 제한한다 (2026-10-12)
+      Resource = [
+        "arn:aws:ssm:us-east-2:${local.account_id}:parameter/meety/dev",
+        "arn:aws:ssm:us-east-2:${local.account_id}:parameter/meety/dev/*",
+      ]
+      Sid = "ReadParams"
     }]
     Version = "2012-10-17"
   })

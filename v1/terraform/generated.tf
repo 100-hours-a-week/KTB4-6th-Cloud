@@ -292,10 +292,7 @@ resource "aws_cloudwatch_log_group" "prod_app_docker" {
 resource "aws_route_table" "public" {
   propagating_vgws = []
   region           = "us-east-2"
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = "igw-01d5e5e30cfac97f2"
-  }
+  # 경로는 aws_route 리소스로 관리한다 (migration.tf). route 블록을 적지 않으면 기존 경로를 건드리지 않는다.
   tags = {
     Name    = "meety-route-table-public"
     Service = "meety"
@@ -1009,8 +1006,9 @@ resource "aws_instance" "dev_data" {
     Name    = "dev-data-v1"
     Service = "meety-staging"
   }
-  tenancy                = "default"
-  vpc_security_group_ids = ["sg-016d5ef2c40006305", "sg-0769decbce98ab96b"]
+  tenancy = "default"
+  # dev_data_migration: V2 staging DB의 3306 접근 허용 (migration.tf)
+  vpc_security_group_ids = ["sg-016d5ef2c40006305", "sg-0769decbce98ab96b", aws_security_group.dev_data_migration.id]
   capacity_reservation_specification {
     capacity_reservation_preference = "open"
   }

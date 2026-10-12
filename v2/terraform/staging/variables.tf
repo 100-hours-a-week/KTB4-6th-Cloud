@@ -151,6 +151,18 @@ variable "db_root_volume_size" {
   default     = 30
 }
 
+variable "db_private_ip" {
+  description = "DB 인스턴스 사설 IP. V1 dev DB의 보안 그룹이 이 주소의 3306 접근만 허용하므로, 인스턴스를 교체해도 바뀌지 않게 고정한다"
+  type        = string
+  default     = "10.1.10.132"
+}
+
+variable "db_server_id" {
+  description = "MySQL server_id. 복제하는 서버끼리 겹치면 안 된다 (V1 dev, prod는 1)"
+  type        = number
+  default     = 2
+}
+
 variable "db_mysql_image" {
   description = "MySQL 컨테이너 이미지. V1과 같은 8.4 계열을 패치 버전까지 고정한다"
   type        = string

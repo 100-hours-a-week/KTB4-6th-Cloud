@@ -511,3 +511,40 @@ resource "aws_iam_role_policy" "gha_deploy_ai" {
   })
 }
 
+
+# 인스턴스 역할이 자기 경로 밖의 파라미터를 읽지 못하게 막는다 (2026-10-12)
+# AmazonSSMManagedInstanceCore가 ssm:GetParameter(s)를 모든 파라미터(*)에 허용하므로, 위의 읽기 허용 범위만으로는 막을 수 없다.
+# Deny는 Allow보다 우선한다. 다른 리전(오하이오 V1)의 파라미터도 함께 거부된다.
+locals {
+  instance_param_allow = {
+    fe = { role = aws_iam_role.fe.id, paths = ["fe", "fe/*"] }
+    db = { role = aws_iam_role.db.id, paths = ["db", "db/*"] }
+    ai = { role = aws_iam_role.ai.id, paths = ["ai", "ai/*", "be/INTERNAL_API_KEY"] }
+  }
+}
+
+resource "aws_iam_role_policy" "instance_params_deny" {
+  for_each = local.instance_param_allow
+
+  name = "deny-other-params"
+  role = each.value.role
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "DenyParamsOutsideOwnPath"
+      Effect = "Deny"
+      Action = [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:GetParametersByPath",
+        "ssm:GetParameterHistory",
+      ]
+      NotResource = concat(
+        [for p in each.value.paths : "${local.param_arn_prefix}/${p}"],
+        # AMI ID 등 AWS가 공개하는 파라미터
+        ["arn:aws:ssm:*::parameter/aws/*"],
+      )
+    }]
+  })
+}

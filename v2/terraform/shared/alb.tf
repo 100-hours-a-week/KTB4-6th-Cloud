@@ -8,6 +8,17 @@ resource "aws_acm_certificate_validation" "staging" {
   certificate_arn = aws_acm_certificate.staging.arn
 }
 
+# V1 dev 이전 리허설 인증서. 검증 레코드를 가비아에 등록했고 발급이 끝났다 (2026-10-12)
+resource "aws_acm_certificate_validation" "dev" {
+  certificate_arn = aws_acm_certificate.dev.arn
+}
+
+# HTTPS 리스너에 dev 인증서를 추가한다. ALB는 요청의 도메인(SNI)에 맞는 인증서를 고른다
+resource "aws_lb_listener_certificate" "dev" {
+  listener_arn    = aws_lb_listener.https.arn
+  certificate_arn = aws_acm_certificate_validation.dev.certificate_arn
+}
+
 resource "aws_lb" "main" {
   name               = "${local.name_prefix}-alb"
   load_balancer_type = "application"

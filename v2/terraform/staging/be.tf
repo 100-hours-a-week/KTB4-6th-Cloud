@@ -69,6 +69,8 @@ resource "aws_ecs_task_definition" "be" {
       { name = "CREDIT_SUMMARY_REGENERATE_COST", value = "0" },
       { name = "CREDIT_AI_CHAT_MESSAGE_COST", value = "0" },
       { name = "CREDIT_ANALYSIS_REPORT_COST", value = "0" },
+      # DB 이전 리허설용 쓰기 게이트. 켜면 닫힌 채로 기동하고, 관리 API로 열 때까지 DB 쓰기를 대기시킨다
+      { name = "MIGRATION_WRITE_GATE_ENABLED", value = tostring(var.be_migration_write_gate_enabled) },
     ]
 
     # 비밀값은 태스크가 시작할 때 ECS가 Parameter Store에서 읽어 넣는다 (실행 역할 권한).
@@ -83,6 +85,8 @@ resource "aws_ecs_task_definition" "be" {
       { name = "KAKAO_CLIENT_SECRET", valueFrom = "${local.param_arn_prefix}/be/KAKAO_CLIENT_SECRET" },
       { name = "KAKAO_ADMIN_KEY", valueFrom = "${local.param_arn_prefix}/be/KAKAO_ADMIN_KEY" },
       { name = "INTERNAL_API_KEY", valueFrom = "${local.param_arn_prefix}/be/INTERNAL_API_KEY" },
+      # 게이트 관리 API 토큰(32자 이상). Parameter Store에 값이 없으면 태스크가 시작되지 않는다
+      { name = "MIGRATION_WRITE_GATE_ADMIN_TOKEN", valueFrom = "${local.param_arn_prefix}/be/MIGRATION_WRITE_GATE_ADMIN_TOKEN" },
     ]
 
     logConfiguration = {

@@ -88,9 +88,13 @@ variable "be_health_check_path" {
 }
 
 variable "be_bake_time_minutes" {
-  description = "블루/그린 배포에서 트래픽을 넘긴 뒤 이전 버전 태스크를 유지하는 시간(분). 회의 최대 시간(90분)보다 길게 둔다"
+  description = <<-EOT
+    블루/그린 배포에서 트래픽을 넘긴 뒤 이전 버전 태스크를 유지하는 시간(분).
+    평소에는 회의 최대 시간(90분)보다 길게 95로 둔다.
+    V1 dev 이전 리허설 동안에는 지킬 회의가 없어 2로 줄인다. 리허설이 끝나면 95로 되돌린다.
+  EOT
   type        = number
-  default     = 95
+  default     = 2
 }
 
 variable "be_realtime_paths" {
@@ -102,6 +106,16 @@ variable "be_realtime_paths" {
   EOT
   type        = list(string)
   default     = ["/*"]
+}
+
+variable "be_migration_write_gate_enabled" {
+  description = <<-EOT
+    BE DB 쓰기 게이트 사용 여부.
+    V1 dev 이전 리허설 동안에는 true로 두어 복제 중 서울 DB 쓰기를 막는다.
+    켜진 태스크는 재시작할 때마다 닫힌 채로 뜨므로, 전환이 끝나면 false로 바꿔 배포한다.
+  EOT
+  type        = bool
+  default     = true
 }
 
 variable "be_api_min_count" {

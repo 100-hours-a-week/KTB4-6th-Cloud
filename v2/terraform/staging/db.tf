@@ -7,15 +7,17 @@ resource "aws_instance" "db" {
 
   # private 서브넷(2a). public IP 없이 FE/NAT 인스턴스를 거쳐 외부로 나간다
   subnet_id                   = aws_subnet.private[0].id
+  private_ip                  = var.db_private_ip
   vpc_security_group_ids      = [aws_security_group.db.id]
   iam_instance_profile        = aws_iam_instance_profile.db.name
   associate_public_ip_address = false
 
   user_data = templatefile("${path.module}/user_data/db.sh.tftpl", {
-    region      = var.region
-    param_path  = "/meety/${var.env}/db"
-    mysql_image = var.db_mysql_image
-    redis_image = var.db_redis_image
+    region       = var.region
+    param_path   = "/meety/${var.env}/db"
+    mysql_image  = var.db_mysql_image
+    redis_image  = var.db_redis_image
+    db_server_id = var.db_server_id
   })
 
   # 크레딧을 다 쓰면 기준 성능으로 제한되고 추가 요금은 없다.

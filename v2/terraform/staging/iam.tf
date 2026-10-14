@@ -82,23 +82,24 @@ resource "aws_iam_role_policy" "be_task_files" {
     Statement = [
       {
         # presigned URL 업로드, 다운로드와 파일 삭제, 크기 조회(HeadObject는 GetObject 권한을 쓴다)
-        Sid      = "ReadWriteObjects"
-        Effect   = "Allow"
-        Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
-        Resource = "${aws_s3_bucket.files.arn}/*"
+        Sid    = "ReadWriteObjects"
+        Effect = "Allow"
+        Action = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+        # V1 dev 이전 리허설 동안 BE가 쓰는 V1 dev 버킷(be_files_bucket)도 허용한다
+        Resource = ["${aws_s3_bucket.files.arn}/*", "arn:aws:s3:::${var.be_files_bucket}/*"]
       },
       {
         # 없는 파일을 조회할 때 403 대신 404(NoSuchKey)를 받으려면 필요하다
         Sid      = "ListBucket"
         Effect   = "Allow"
         Action   = "s3:ListBucket"
-        Resource = aws_s3_bucket.files.arn
+        Resource = [aws_s3_bucket.files.arn, "arn:aws:s3:::${var.be_files_bucket}"]
       },
     ]
   })
 }
 
-# FE 인스턴스 역할: 지금은 SSM 접속에 필요한 권한만 준다.
+# FE 인스턴스 역할: SSM 접속과, FE 컨테이너를 띄울 때 /meety/staging/fe/ 아래 비밀값을 읽는 권한을 준다.
 resource "aws_iam_role" "fe" {
   name = "${local.name_prefix}-fe"
 
@@ -119,6 +120,34 @@ resource "aws_iam_role" "fe" {
 resource "aws_iam_role_policy_attachment" "fe_ssm" {
   role       = aws_iam_role.fe.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# 버그 리포트를 보내는 Discord webhook 주소 등. FE 서버 쪽에서 쓴다
+resource "aws_iam_role_policy" "fe_params" {
+  name = "read-fe-params"
+  role = aws_iam_role.fe.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ReadFeParams"
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter", "ssm:GetParametersByPath"]
+        Resource = ["${local.param_arn_prefix}/fe", "${local.param_arn_prefix}/fe/*"]
+      },
+      {
+        # SecureString 복호화는 Parameter Store를 거친 요청에만 허용한다
+        Sid      = "DecryptViaSsm"
+        Effect   = "Allow"
+        Action   = "kms:Decrypt"
+        Resource = data.aws_kms_alias.ssm.target_key_arn
+        Condition = {
+          StringEquals = { "kms:ViaService" = "ssm.${var.region}.amazonaws.com" }
+        }
+      },
+    ]
+  })
 }
 
 resource "aws_iam_instance_profile" "fe" {
@@ -482,3 +511,40 @@ resource "aws_iam_role_policy" "gha_deploy_ai" {
   })
 }
 
+
+# 인스턴스 역할이 자기 경로 밖의 파라미터를 읽지 못하게 막는다 (2026-10-12)
+# AmazonSSMManagedInstanceCore가 ssm:GetParameter(s)를 모든 파라미터(*)에 허용하므로, 위의 읽기 허용 범위만으로는 막을 수 없다.
+# Deny는 Allow보다 우선한다. 다른 리전(오하이오 V1)의 파라미터도 함께 거부된다.
+locals {
+  instance_param_allow = {
+    fe = { role = aws_iam_role.fe.id, paths = ["fe", "fe/*"] }
+    db = { role = aws_iam_role.db.id, paths = ["db", "db/*"] }
+    ai = { role = aws_iam_role.ai.id, paths = ["ai", "ai/*", "be/INTERNAL_API_KEY"] }
+  }
+}
+
+resource "aws_iam_role_policy" "instance_params_deny" {
+  for_each = local.instance_param_allow
+
+  name = "deny-other-params"
+  role = each.value.role
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "DenyParamsOutsideOwnPath"
+      Effect = "Deny"
+      Action = [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:GetParametersByPath",
+        "ssm:GetParameterHistory",
+      ]
+      NotResource = concat(
+        [for p in each.value.paths : "${local.param_arn_prefix}/${p}"],
+        # AMI ID 등 AWS가 공개하는 파라미터
+        ["arn:aws:ssm:*::parameter/aws/*"],
+      )
+    }]
+  })
+}

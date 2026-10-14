@@ -47,6 +47,11 @@ services:
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
+      # V1 MySQL을 복제받기 위한 설정. read_only는 첫 시작 때 DB와 계정 생성을 막으므로 여기 넣지 않고,
+      # 복제본, 승격 단계에 따라 절차서에서 SET PERSIST로 바꾼다.
+      - --server-id=${db_server_id}
+      - --skip-replica-start=ON
+      - --relay-log-recovery=ON
     environment:
       MYSQL_DATABASE: "$${DB_NAME}"
       MYSQL_USER: "$${DB_USER}"

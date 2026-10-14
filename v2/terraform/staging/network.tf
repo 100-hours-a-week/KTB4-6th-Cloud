@@ -43,6 +43,13 @@ resource "aws_route" "private_nat" {
   network_interface_id   = aws_instance.fe.primary_network_interface_id
 }
 
+# V1(오하이오) VPC로 가는 트래픽은 피어링으로 보낸다. 서울 DB가 V1 MySQL을 덤프, 복제할 때 쓴다.
+resource "aws_route" "private_v1" {
+  route_table_id            = aws_route_table.private.id
+  destination_cidr_block    = var.v1_vpc_cidr
+  vpc_peering_connection_id = local.shared.v1_peering_connection_id
+}
+
 resource "aws_route_table_association" "private" {
   count = length(aws_subnet.private)
 

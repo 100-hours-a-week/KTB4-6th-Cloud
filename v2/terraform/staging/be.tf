@@ -57,21 +57,23 @@ resource "aws_ecs_task_definition" "be" {
       # AI 인스턴스의 private IP로 직접 부른다 (ai-analysis 8001, ai-live 8000)
       { name = "AI_HTTP_URL", value = "http://${aws_instance.ai.private_ip}:8001" },
       { name = "AI_WEBSOCKET_URL", value = "ws://${aws_instance.ai.private_ip}:8000/v1/live-meeting" },
-      { name = "AWS_S3_BUCKET", value = aws_s3_bucket.files.bucket },
-      { name = "AWS_S3_REGION", value = var.region },
+      { name = "AWS_S3_BUCKET", value = var.be_files_bucket },
+      { name = "AWS_S3_REGION", value = var.be_files_region },
+      # V1 dev와 같은 JVM 힙 설정. 지정하지 않으면 컨테이너 메모리의 25%(512MB)만 힙으로 쓴다
+      { name = "JAVA_TOOL_OPTIONS", value = "-Xmx1024m -Xms512m" },
+      # V1 dev와 같이 DB에 연결되지 않아도 앱 기동은 성공하게 한다. 연결 상태는 헬스체크(/actuator/health)로 드러난다
+      { name = "SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT", value = "-1" },
       # 테스트 편의를 위해 V1 dev와 같은 값을 쓴다 (녹음, 요약, 챗봇, 리포트 크레딧 차감 없음, 회의 생성 하루 100회)
       { name = "MEETING_DAILY_CREATE_LIMIT", value = "100" },
       { name = "CREDIT_RECORDING_COST", value = "0" },
       { name = "CREDIT_SUMMARY_REGENERATE_COST", value = "0" },
       { name = "CREDIT_AI_CHAT_MESSAGE_COST", value = "0" },
       { name = "CREDIT_ANALYSIS_REPORT_COST", value = "0" },
-      # Sentry는 V1 dev와 같은 프로젝트로 보내되, environment를 나눠 V1 dev(staging) 이벤트와 섞이지 않게 한다
-      { name = "SENTRY_ENVIRONMENT", value = "v2-staging" },
-      { name = "SENTRY_SEND_DEFAULT_PII", value = "true" },
-      { name = "BE_SENTRY_LOGS_ENABLED", value = "true" },
-      { name = "BE_SENTRY_TRACES_SAMPLE_RATE", value = "1.0" },
-      { name = "SENTRY_PROFILE_SESSION_SAMPLE_RATE", value = "1.0" },
-      { name = "SENTRY_PROFILE_LIFECYCLE", value = "TRACE" },
+      # DB 이전 리허설용 쓰기 게이트. 켜면 닫힌 채로 기동하고, 관리 API로 열 때까지 DB 쓰기를 대기시킨다
+      { name = "MIGRATION_WRITE_GATE_ENABLED", value = tostring(var.be_migration_write_gate_enabled) },
+      # 게이트가 닫힌 동안 쓰기 요청이 기다리는 최대 시간. 1차 리허설에서 기본값 10초로는 수동 전환 구간을 넘기지 못했다.
+      # ALB 유휴 타임아웃(60초)과 부하 스크립트의 요청 타임아웃보다 짧게 둔다
+      { name = "MIGRATION_WRITE_GATE_MAX_WAIT", value = "30s" },
     ]
 
     # 비밀값은 태스크가 시작할 때 ECS가 Parameter Store에서 읽어 넣는다 (실행 역할 권한).
@@ -86,7 +88,8 @@ resource "aws_ecs_task_definition" "be" {
       { name = "KAKAO_CLIENT_SECRET", valueFrom = "${local.param_arn_prefix}/be/KAKAO_CLIENT_SECRET" },
       { name = "KAKAO_ADMIN_KEY", valueFrom = "${local.param_arn_prefix}/be/KAKAO_ADMIN_KEY" },
       { name = "INTERNAL_API_KEY", valueFrom = "${local.param_arn_prefix}/be/INTERNAL_API_KEY" },
-      { name = "SENTRY_DSN", valueFrom = "${local.param_arn_prefix}/be/SENTRY_DSN" },
+      # 게이트 관리 API 토큰(32자 이상). Parameter Store에 값이 없으면 태스크가 시작되지 않는다
+      { name = "MIGRATION_WRITE_GATE_ADMIN_TOKEN", valueFrom = "${local.param_arn_prefix}/be/MIGRATION_WRITE_GATE_ADMIN_TOKEN" },
     ]
 
     logConfiguration = {

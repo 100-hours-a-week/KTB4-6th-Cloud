@@ -26,3 +26,7 @@ v1/load-test/reports/
 
 # 부하 발생기 OS에 맞춰 빌드한 SSE 확장 실행 파일
 v1/load-test/k6-sse
+
+# DB 이전 리허설 결과: k6 요청 기록과 서울 DB 조회 결과는 실행마다 로컬에만 둔다 (전환 로그는 위 *.log로 제외)
+v1/migration/ops-*.jsonl
+v1/migration/meetings-*.tsv

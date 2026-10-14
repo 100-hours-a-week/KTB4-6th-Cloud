@@ -71,6 +71,9 @@ resource "aws_ecs_task_definition" "be" {
       { name = "CREDIT_ANALYSIS_REPORT_COST", value = "0" },
       # DB 이전 리허설용 쓰기 게이트. 켜면 닫힌 채로 기동하고, 관리 API로 열 때까지 DB 쓰기를 대기시킨다
       { name = "MIGRATION_WRITE_GATE_ENABLED", value = tostring(var.be_migration_write_gate_enabled) },
+      # 게이트가 닫힌 동안 쓰기 요청이 기다리는 최대 시간. 1차 리허설에서 기본값 10초로는 수동 전환 구간을 넘기지 못했다.
+      # ALB 유휴 타임아웃(60초)과 부하 스크립트의 요청 타임아웃보다 짧게 둔다
+      { name = "MIGRATION_WRITE_GATE_MAX_WAIT", value = "30s" },
     ]
 
     # 비밀값은 태스크가 시작할 때 ECS가 Parameter Store에서 읽어 넣는다 (실행 역할 권한).

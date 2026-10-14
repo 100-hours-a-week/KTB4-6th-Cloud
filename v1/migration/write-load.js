@@ -26,8 +26,8 @@ if (ACCOUNT_COUNT > 50) {
   throw new Error(`계정 ${ACCOUNT_COUNT}개가 필요합니다. RATE나 DURATION을 줄이세요 (최대 50개)`);
 }
 
-// 게이트 대기(최대 10초)와 리전 간 지연을 넉넉히 넘기도록 잡는다.
-const REQUEST_TIMEOUT = '30s';
+// 게이트 대기(최대 30초)와 리전 간 지연을 넉넉히 넘기도록 잡는다. ALB 유휴 타임아웃(60초)보다는 짧게 둔다.
+const REQUEST_TIMEOUT = '45s';
 
 const opDuration = new Trend('mig_op_duration', true);
 const opFailures = new Counter('mig_op_failures');
@@ -42,7 +42,7 @@ export const options = {
       timeUnit: '1s',
       duration: DURATION,
       preAllocatedVUs: Math.max(10, RATE * 10),
-      // 사이클 하나가 게이트 대기로 최대 30초 이상 걸릴 수 있어 그만큼 VU를 더 허용한다.
+      // 사이클 하나가 게이트 대기로 30초 이상 걸릴 수 있어 그만큼 VU를 더 허용한다.
       maxVUs: Math.max(50, RATE * 40),
     },
   },

@@ -101,6 +101,17 @@ resource "aws_vpc_security_group_ingress_rule" "db_mysql_from_be" {
   to_port                      = 3306
 }
 
+# V1 dev DB 이전 리허설: 오하이오 dev-app의 ProxySQL이 전환 후 서울 DB에 접속한다.
+# 리전 간 피어링은 보안 그룹을 참조할 수 없어 사설 IP로 허용한다. 리허설이 끝나면 지운다
+resource "aws_vpc_security_group_ingress_rule" "db_mysql_from_v1_dev_proxysql" {
+  security_group_id = aws_security_group.db.id
+  description       = "MySQL from V1 dev-app ProxySQL (Ohio, VPC peering)"
+  cidr_ipv4         = "${var.v1_dev_app_private_ip}/32"
+  ip_protocol       = "tcp"
+  from_port         = 3306
+  to_port           = 3306
+}
+
 resource "aws_vpc_security_group_ingress_rule" "db_redis_from_be" {
   security_group_id            = aws_security_group.db.id
   description                  = "Redis from staging BE"

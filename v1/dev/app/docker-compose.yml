@@ -130,3 +130,21 @@ services:
       - internal_net
     # CloudWatch Agent가 수집하는 Docker json-file 로그를 유지한다.
     logging: *default-logging
+
+  proxysql:
+    container_name: dev-proxysql
+    # 3.0.x는 Stable 계열. 3.0에서는 caching_sha2_password의 프론트엔드 RSA 인증을 지원하지 않아
+    # BE → ProxySQL은 기본(mysql_native_password), ProxySQL → MySQL은 caching_sha2_password + TLS로 접속한다
+    image: proxysql/proxysql:3.0.11
+    restart: unless-stopped
+    mem_limit: 256m                 # 실측 전이라 넉넉히. 측정 후 조정
+    ports:
+      - "127.0.0.1:6032:6032"      # 관리 포트: 서버 안에서만 접속
+    expose:
+      - "6033"                     # BE가 접속하는 포트 (내부 네트워크)
+    volumes:
+      - ./proxysql/proxysql.cnf:/etc/proxysql.cnf:ro
+      - ./proxysql/data:/var/lib/proxysql   # 런타임에 바꾼 설정(SAVE TO DISK) 유지
+    networks:
+      - internal_net
+    logging: *default-logging

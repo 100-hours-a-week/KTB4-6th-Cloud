@@ -278,6 +278,12 @@ else
   COUNT=$(printf '%s\n' "$CHANGED" | wc -l | tr -d ' ')
 fi
 
+# ProxySQL은 데이터 폴더가 비어 있는 첫 기동 때만 proxysql.cnf를 읽는다.
+# 이미 떠 있는 서버에서는 파일만 바뀌고 실제 설정은 그대로이므로, 관리 포트에서 SQL로 바꿔야 한다.
+if printf '%s\n' "$CHANGED" | grep -q ' proxysql/proxysql.cnf$'; then
+  warn "proxysql.cnf는 첫 기동 때만 반영됩니다. 실행 중인 ProxySQL에는 관리 포트(6032)에서 SQL로 같은 변경을 적용하세요."
+fi
+
 # 비교 결과를 확인한 뒤에만 기존 적용 확인·파일 전송으로 진행한다.
 if $SHOW_DIFF && [ "$COUNT" -gt 0 ]; then
   show_file_diffs
@@ -415,6 +421,13 @@ done
 docker compose config -q
 echo "  ${G}compose 문법 통과${R}"
 
+# ProxySQL 설정 파일 확인. 바인드 대상 파일이 없으면 Docker가 같은 이름의 빈 디렉터리를 만들어 기동에 실패한다
+if docker compose config --services | grep -qx proxysql; then
+  [ -f proxysql/proxysql.cnf ] && [ ! -L proxysql/proxysql.cnf ] \
+    || { echo "  proxysql/proxysql.cnf가 일반 파일이 아닙니다"; exit 1; }
+  echo "  ${G}proxysql 설정 파일 확인${R}"
+fi
+
 # 3) nginx 설정 검증 (-q: 정상이면 출력 없음, 에러일 때만 출력)
 if [ "$TARGET" = "app" ]; then
   docker compose exec -T nginx nginx -t -q
@@ -440,6 +453,13 @@ remote_script "$TARGET" "$REMOTE_DIR" "$SHA" "$BRANCH" "$GREEN" "$RESET" <<'EOF'
   || fail "적용 중 오류가 발생했습니다. 서버 상태를 확인하세요."
 set -eo pipefail
 TARGET=$1; cd "$2"; SHA=$3; BRANCH=$4; G=$5; R=$6
+
+# ProxySQL 데이터 폴더(런타임 설정 저장, 비밀번호 포함)는 git 추적 대상이 아니라 전송되지 않으므로 서버에서 만든다.
+# 이미 있으면 그대로 두어 SQL로 바꾼 설정을 유지한다
+if docker compose config --services | grep -qx proxysql; then
+  mkdir -p proxysql/data
+  chmod 700 proxysql/data
+fi
 
 # 컨테이너별 처리 결과를 줄 단위로 출력 (Recreate, Started, Running 등)
 # --wait: healthcheck 통과까지 대기 (최대 90초). 실패하면 상태와 최근 로그를 보여주고 중단

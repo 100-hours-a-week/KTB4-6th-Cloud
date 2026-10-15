@@ -68,6 +68,11 @@ output "dev_cert_validation_records" {
   }
 }
 
+output "route53_name_servers" {
+  description = "가비아의 네임서버 설정에 넣을 Route 53 네임서버 4개"
+  value       = aws_route53_zone.main.name_servers
+}
+
 output "dev_cert_arn" {
   description = "V1 dev 이전 리허설 인증서 ARN (발급 후 ALB HTTPS 리스너에 추가)"
   value       = aws_acm_certificate.dev.arn

@@ -113,9 +113,10 @@ variable "be_migration_write_gate_enabled" {
     BE DB 쓰기 게이트 사용 여부.
     V1 dev 이전 리허설 동안에는 true로 두어 복제 중 서울 DB 쓰기를 막는다.
     켜진 태스크는 재시작할 때마다 닫힌 채로 뜨므로, 전환이 끝나면 false로 바꿔 배포한다.
+    리허설을 마치고 dev를 오하이오로 되돌려 false로 둔다 (2026-10-15).
   EOT
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "be_api_min_count" {

@@ -23,9 +23,22 @@ resource "aws_route53_record" "v1_prod" {
   records = ["3.136.17.161"]
 }
 
-# V2 ALB로 가는 이름. dev는 V1 dev 이전 리허설 이후 서울 ALB를 가리킨다
+# V1 dev (오하이오 dev-app 인스턴스의 탄력적 IP).
+# DB 이전 리허설 동안 서울 ALB를 가리켰다가, 개발자가 다시 쓸 수 있게 오하이오로 되돌렸다 (2026-10-15).
+# 다음 이전 때 빨리 옮길 수 있도록 TTL을 60초로 둔다
+resource "aws_route53_record" "v1_dev" {
+  for_each = toset(["dev", "api-dev"])
+
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "${each.value}.${aws_route53_zone.main.name}"
+  type    = "A"
+  ttl     = 60
+  records = ["3.147.128.193"]
+}
+
+# V2 ALB로 가는 이름
 resource "aws_route53_record" "alb" {
-  for_each = toset(["staging", "api-staging", "dev", "api-dev"])
+  for_each = toset(["staging", "api-staging"])
 
   zone_id = aws_route53_zone.main.zone_id
   name    = "${each.value}.${aws_route53_zone.main.name}"
@@ -49,4 +62,16 @@ resource "aws_route53_record" "cert_validation" {
   type    = each.value.resource_record_type
   ttl     = 600
   records = [each.value.resource_record_value]
+}
+
+# dev 레코드를 서울 ALB CNAME(alb)에서 오하이오 A 레코드(v1_dev)로 옮긴다.
+# 같은 이름에 CNAME과 A를 동시에 둘 수 없어, 새 리소스로 만들지 않고 기존 레코드를 수정하게 한다 (타입, 값, TTL을 한 번에 변경)
+moved {
+  from = aws_route53_record.alb["dev"]
+  to   = aws_route53_record.v1_dev["dev"]
+}
+
+moved {
+  from = aws_route53_record.alb["api-dev"]
+  to   = aws_route53_record.v1_dev["api-dev"]
 }

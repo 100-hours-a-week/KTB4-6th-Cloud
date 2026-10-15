@@ -68,6 +68,9 @@ services:
     # 힙(-Xmx1024m)에 힙 밖 메모리(메타스페이스, 스레드, Sentry 에이전트 등) 여유를 더한 값. 실측 사용량은 약 920MB.
     # JAVA_TOOL_OPTIONS의 -Xmx를 늘리면 이 값도 함께 늘린다. 낮게 잡으면 BE가 반복 종료된다
     mem_limit: 1400m
+    # ProxySQL이 먼저 떠 있어야 DB에 접속할 수 있다
+    depends_on:
+      - proxysql
     ports:
       # AI 서버가 app 사설 IP:8080으로 호출하며, 접근은 보안 그룹에서 제한한다.
       - "8080:8080"
@@ -84,9 +87,12 @@ services:
       CREDIT_AI_CHAT_MESSAGE_COST: "0"            # AI 채팅 메시지 1회 비용 정책값(현재 차감 로직 미연결)
       CREDIT_ANALYSIS_REPORT_COST: "0"            # 분석 리포트 1회 비용 정책값(현재 차감 로직 미연결)
       SERVER_PORT: "8080"
-      # DB·Redis가 EC2-micro로 분리되어 서비스명(db/redis) DNS 대신
-      # DATA_TIER_HOST(EC2-micro 사설 IP)로 통일해서 가리킴
-      SPRING_DATASOURCE_URL: "jdbc:mysql://${DATA_TIER_HOST}:3306/${DB_NAME}"
+      # staging 프로필의 ddl-auto 기본값(create)은 기동할 때마다 테이블을 지우고 다시 만든다.
+      # dev 데이터를 유지하기 위해 update로 덮어쓴다 (BE에서 프로필 기본값을 고치면 제거)
+      SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+      # DB는 ProxySQL(같은 서버의 dev-proxysql)을 거쳐 dev-data(DATA_TIER_HOST)에 접속한다.
+      # DB 이전 때 BE 재시작 없이 접속 대상을 바꾸기 위해서다. 직접 접속으로 되돌리려면 ${DATA_TIER_HOST}:3306으로 바꾼다
+      SPRING_DATASOURCE_URL: "jdbc:mysql://dev-proxysql:6033/${DB_NAME}"
       SPRING_DATASOURCE_USERNAME: "${DB_USER}"
       SPRING_DATASOURCE_PASSWORD: "${DB_PASSWORD}"
       # Redis

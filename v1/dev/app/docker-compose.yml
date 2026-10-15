@@ -15,6 +15,9 @@ services:
     container_name: dev-nginx
     image: nginx:1.29.1-alpine
     restart: unless-stopped
+    # 한 컨테이너가 메모리를 과하게 쓰면 넘친 컨테이너만 종료되게 상한을 둔다 (t3.small, 약 1.9GB).
+    # 상한은 미리 확보하는 값이 아니므로 합이 서버 메모리보다 커도 된다. 실측 사용량은 약 9MB
+    mem_limit: 64m
     ports:
       - "80:80"
       - "443:443"
@@ -35,6 +38,8 @@ services:
     image: "devkyulim/meety-fe:${FE_IMAGE_TAG}"
     pull_policy: always
     restart: unless-stopped
+    # 실측 사용량은 약 75MB. 서버 렌더링 중 순간 증가를 고려해 여유
+    mem_limit: 384m
     expose:
       - "3000"
     environment:
@@ -60,6 +65,9 @@ services:
     image: "devkyulim/meety-be:${BE_IMAGE_TAG}"
     pull_policy: always
     restart: unless-stopped
+    # 힙(-Xmx1024m)에 힙 밖 메모리(메타스페이스, 스레드, Sentry 에이전트 등) 여유를 더한 값. 실측 사용량은 약 920MB.
+    # JAVA_TOOL_OPTIONS의 -Xmx를 늘리면 이 값도 함께 늘린다. 낮게 잡으면 BE가 반복 종료된다
+    mem_limit: 1400m
     ports:
       # AI 서버가 app 사설 IP:8080으로 호출하며, 접근은 보안 그룹에서 제한한다.
       - "8080:8080"

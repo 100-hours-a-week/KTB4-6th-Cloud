@@ -209,13 +209,19 @@ def prepare_meetings(args: argparse.Namespace) -> None:
         previous_team_count = 0
     result["preparation"]["authenticatedTeams"] = authenticated_teams
     save_fixture(args.output, result)
-    meeting_body = {"title": "부하테스트 회의", "purpose": "테스트 전용",
-                    "note": "", "targetDurationMinutes": 20}
     team_id = None
     try:
         for team_number, team in enumerate(state["teams"], start=1):
             team_id = team["teamId"]
             owner_token = tokens[team["members"][0]["loginId"]]
+            # BE #282부터 회의 생성 시 참석자 지정이 필수다. 팀원 전원을 참석자로 지정한다.
+            members = request_resource(base_url, f"/api/v1/teams/{team_id}/members", owner_token)
+            if not isinstance(members.get("members"), list) or len(members["members"]) != len(team["members"]):
+                raise RuntimeError(f"팀 {team_id}의 팀원 목록이 준비 기록과 다릅니다")
+            meeting_body = {"title": "부하테스트 회의", "purpose": "테스트 전용",
+                            "note": "", "targetDurationMinutes": 20,
+                            "attendeeTeamMemberIds": [require_id(m, "teamMemberId") for m in members["members"]],
+                            "customAttendeeNames": []}
             if team_number <= previous_team_count:
                 prepared = result["preparation"]["teams"][team_number - 1]
             else:

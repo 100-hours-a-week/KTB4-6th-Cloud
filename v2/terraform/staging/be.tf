@@ -57,8 +57,8 @@ resource "aws_ecs_task_definition" "be" {
       # AI 인스턴스의 private IP로 직접 부른다 (ai-analysis 8001, ai-live 8000)
       { name = "AI_HTTP_URL", value = "http://${aws_instance.ai.private_ip}:8001" },
       { name = "AI_WEBSOCKET_URL", value = "ws://${aws_instance.ai.private_ip}:8000/v1/live-meeting" },
-      { name = "AWS_S3_BUCKET", value = var.be_files_bucket },
-      { name = "AWS_S3_REGION", value = var.be_files_region },
+      { name = "AWS_S3_BUCKET", value = aws_s3_bucket.files.bucket },
+      { name = "AWS_S3_REGION", value = var.region },
       # V1 dev와 같은 JVM 힙 설정. 지정하지 않으면 컨테이너 메모리의 25%(512MB)만 힙으로 쓴다
       { name = "JAVA_TOOL_OPTIONS", value = "-Xmx1024m -Xms512m" },
       # V1 dev와 같이 DB에 연결되지 않아도 앱 기동은 성공하게 한다. 연결 상태는 헬스체크(/actuator/health)로 드러난다

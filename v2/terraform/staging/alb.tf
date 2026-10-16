@@ -68,7 +68,6 @@ resource "aws_lb_target_group" "be_realtime_green" {
 
 # api-staging.meety.io.kr 의 실시간 경로 → be-realtime
 # be-api 규칙(105)보다 먼저 검사되도록 번호를 작게 둔다
-# V1 dev 이전 리허설 동안에는 be_realtime_paths가 /*라서 api-staging, api-dev의 모든 요청이 여기로 온다
 resource "aws_lb_listener_rule" "be_realtime" {
   listener_arn = local.shared.https_listener_arn
   priority     = 100 # staging은 100번대, prod는 200번대를 쓴다

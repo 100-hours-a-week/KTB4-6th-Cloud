@@ -47,27 +47,15 @@ variable "be_domain" {
 }
 
 variable "be_extra_domains" {
-  description = "be_domain 외에 BE로 보낼 도메인. V1 dev 이전 리허설 동안 dev BE 도메인을 같은 BE 서비스로 받는다"
+  description = "be_domain 외에 BE로 보낼 도메인. V1 dev 이전 리허설 때는 api-dev.meety.io.kr을 넣어 같은 BE 서비스로 받았다"
   type        = list(string)
-  default     = ["api-dev.meety.io.kr"]
+  default     = []
 }
 
 variable "be_image" {
-  description = "BE 컨테이너 이미지. V1 dev 이전 리허설 동안 V1 prod와 같은 BE 9bd4237 커밋의 amd64 이미지를 digest로 고정한다"
+  description = "BE 컨테이너 이미지. BE dev 77eaf84 커밋의 amd64 이미지를 digest로 고정한다. 이후 버전은 CI/CD가 이미지만 바꿔 배포한다"
   type        = string
-  default     = "devkyulim/meety-be@sha256:2863e986c557aaf7e1394d36ac30c63044cbb94f05b0cff98cc54297380d19b8"
-}
-
-variable "be_files_bucket" {
-  description = "BE가 녹음 파일을 읽고 쓰는 S3 버킷. V1 dev 이전 리허설 동안 기존 파일을 옮기지 않도록 V1 dev 버킷(오하이오)을 쓴다"
-  type        = string
-  default     = "dev-meety-file-bucket-062270568040-us-east-2-an"
-}
-
-variable "be_files_region" {
-  description = "be_files_bucket의 리전"
-  type        = string
-  default     = "us-east-2"
+  default     = "devkyulim/meety-be@sha256:7b57433e4455bb317ccd9c7628d0663fee35a1989d4a8bf3f34626955d7ede8d"
 }
 
 variable "be_ddl_auto" {
@@ -117,13 +105,15 @@ variable "be_bake_time_minutes" {
 
 variable "be_realtime_paths" {
   description = <<-EOT
-    be-realtime으로 보낼 경로.
-    V1 dev 이전 리허설 동안에는 모든 경로(/*)를 be-realtime 태스크 1개로 보낸다.
-    V1 BE는 SSE 연결과 로그아웃 토큰을 서버 메모리에 두어 여러 태스크로 나누면 동작이 어긋난다.
-    V2 분리 구성으로 돌아갈 때의 값: /ws/*, /api/v1/meetings/*/events, /api/v1/notifications/events
+    be-realtime으로 보낼 경로. 녹음 WebSocket, 회의 SSE, 알림 SSE (BE 코드 기준).
+    V1 dev 이전 리허설 때는 V1 BE가 SSE 연결과 로그아웃 토큰을 서버 메모리에 두어 모든 경로(/*)를 태스크 1개로 보냈다.
   EOT
   type        = list(string)
-  default     = ["/*"]
+  default = [
+    "/ws/*",
+    "/api/v1/meetings/*/events",
+    "/api/v1/notifications/events",
+  ]
 }
 
 variable "be_migration_write_gate_enabled" {
@@ -138,15 +128,15 @@ variable "be_migration_write_gate_enabled" {
 }
 
 variable "be_api_min_count" {
-  description = "be-api 최소 태스크 수 (설계 추정값 2). V1 dev 이전 리허설 동안에는 be-realtime 1개만 쓰므로 0"
+  description = "be-api 최소 태스크 수 (설계 추정값, 부하 테스트 후 조정)"
   type        = number
-  default     = 0
+  default     = 2
 }
 
 variable "be_api_max_count" {
-  description = "be-api 최대 태스크 수 (설계 추정값 5). V1 dev 이전 리허설 동안에는 오토스케일링을 쓰지 않으므로 0"
+  description = "be-api 최대 태스크 수 (설계 추정값, 부하 테스트 후 조정)"
   type        = number
-  default     = 0
+  default     = 5
 }
 
 variable "be_api_cpu_target" {
@@ -156,9 +146,9 @@ variable "be_api_cpu_target" {
 }
 
 variable "be_kakao_redirect_uri" {
-  description = "카카오 로그인 redirect URI. 카카오 콘솔에 등록한 값과 같아야 한다. V1 dev 이전 리허설 동안 V1 dev와 같은 값을 쓴다 (staging 값: https://staging.meety.io.kr/api/auth/kakao/callback)"
+  description = "카카오 로그인 redirect URI. 카카오 콘솔에 등록한 값과 같아야 한다"
   type        = string
-  default     = "https://dev.meety.io.kr/api/auth/kakao/callback"
+  default     = "https://staging.meety.io.kr/api/auth/kakao/callback"
 }
 
 variable "log_retention_days" {
@@ -230,8 +220,7 @@ variable "db_redis_image" {
 variable "fe_allowed_origins" {
   description = "staging FE 주소(origin) 목록. 파일 버킷 CORS와 BE CORS에 쓴다. 로컬 FE에서 staging BE를 붙여 시험할 수 있게 localhost도 둔다"
   type        = list(string)
-  # V1 dev 이전 리허설 동안 dev FE(https://dev.meety.io.kr)도 같은 BE를 부른다
-  default = ["https://staging.meety.io.kr", "https://dev.meety.io.kr", "http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"]
+  default     = ["https://staging.meety.io.kr", "http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"]
 }
 
 variable "fe_domain" {
@@ -241,9 +230,9 @@ variable "fe_domain" {
 }
 
 variable "fe_extra_domains" {
-  description = "fe_domain 외에 FE로 보낼 도메인. V1 dev 이전 리허설 동안 dev FE 도메인을 같은 FE 인스턴스로 받는다"
+  description = "fe_domain 외에 FE로 보낼 도메인. V1 dev 이전 리허설 때는 dev.meety.io.kr을 넣어 같은 FE 인스턴스로 받았다"
   type        = list(string)
-  default     = ["dev.meety.io.kr"]
+  default     = []
 }
 
 variable "fe_container_port" {

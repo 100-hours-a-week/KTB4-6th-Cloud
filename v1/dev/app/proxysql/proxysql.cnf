@@ -1,0 +1,33 @@
+# dev ProxySQL 초기 설정. BE와 MySQL 사이에서 DB 접속 대상을 바꾸는 용도다 (DB 이전 리허설).
+#
+# 이 파일은 데이터 폴더(proxysql/data)가 비어 있는 첫 기동 때만 읽힌다.
+# 그 뒤에는 data의 설정이 우선하므로, 운영 중 변경은 관리 포트(6032)에서 SQL로 하고 SAVE ... TO DISK로 저장한다.
+# 전환 때 바꾼 접속 대상이 재시작 후 이 파일 때문에 되돌아가지 않게 하려는 동작이다.
+#
+# 비밀값은 넣지 않는다. 관리자 비밀번호, 모니터 계정 비밀번호, 앱 계정(mysql_users)은 첫 기동 후 SQL로 설정한다.
+
+datadir="/var/lib/proxysql"
+
+admin_variables=
+{
+    # 기본값. 첫 기동 직후 SQL로 바꾼다. 관리 포트는 compose에서 서버의 127.0.0.1에만 연다
+    admin_credentials="admin:admin;radmin:radmin"
+    mysql_ifaces="0.0.0.0:6032"
+}
+
+mysql_variables=
+{
+    # 작업 스레드 수. 기본 4에서 줄여 메모리를 아낀다 (t3.small에서 BE와 함께 실행)
+    threads=2
+    interfaces="0.0.0.0:6033"
+    # DB 상태 확인 계정. 오하이오, 서울 DB 양쪽에 같은 이름으로 만든다
+    monitor_username="proxysql_monitor"
+    # 쿼리를 보낼 서버가 없을 때 최대 대기 시간(ms). DB 전환 중 쿼리를 실패시키지 않고 기다리게 한다
+    connect_timeout_server_max=30000
+}
+
+mysql_servers=
+(
+    # 쓰기 그룹 10: 오하이오 dev DB (dev-data). DB 계정이 caching_sha2_password라 TLS로 접속한다
+    { hostgroup=10, address="10.0.1.147", port=3306, use_ssl=1, comment="ohio-dev-db" }
+)

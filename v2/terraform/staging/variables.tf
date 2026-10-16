@@ -10,6 +10,12 @@ variable "v1_vpc_cidr" {
   default     = "10.0.0.0/16"
 }
 
+variable "v1_dev_app_private_ip" {
+  description = "V1 dev-app 인스턴스(ProxySQL 실행)의 사설 IP. DB 이전 리허설 때 서울 DB 접속을 허용한다"
+  type        = string
+  default     = "10.0.1.97"
+}
+
 variable "env" {
   description = "환경 이름. prod 폴더에서는 prod로 바꾼다"
   type        = string

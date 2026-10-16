@@ -85,7 +85,8 @@ keys() { grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$1" | tr -d '=' | sort -u; }
 # .env 각 줄을 "키 해시(값)"로 변환. 값이 화면에 노출되지 않고, 로컬/서버 양쪽에서 같은 코드로 실행됨
 FP_FN='fp() {
   local k v
-  while IFS== read -r k v; do
+  # 마지막 줄에 줄바꿈이 없으면 read가 실패를 반환하므로, 읽은 키가 있으면 그 줄도 처리한다
+  while IFS== read -r k v || [ -n "$k" ]; do
     case "$k" in ""|\#*) continue ;; esac
     printf "%s %s\n" "$k" "$(printf %s "$v" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d" " -f1)"
   done < "$1"

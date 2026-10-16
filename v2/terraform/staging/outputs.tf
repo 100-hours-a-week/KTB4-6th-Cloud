@@ -33,6 +33,16 @@ output "db_private_ip" {
   value       = aws_instance.db.private_ip
 }
 
+output "migration_db_instance_id" {
+  description = "DB 이전 리허설용 MySQL 인스턴스 ID. SSM 접속 대상이다"
+  value       = aws_instance.migration_db.id
+}
+
+output "migration_db_private_ip" {
+  description = "DB 이전 리허설용 MySQL 사설 IP. 오하이오 dev-app ProxySQL의 서울 서버 주소로 쓴다"
+  value       = aws_instance.migration_db.private_ip
+}
+
 output "ai_private_ip" {
   description = "staging AI 인스턴스 private IP. BE의 AI_HTTP_URL, AI_WEBSOCKET_URL에 쓴다"
   value       = aws_instance.ai.private_ip

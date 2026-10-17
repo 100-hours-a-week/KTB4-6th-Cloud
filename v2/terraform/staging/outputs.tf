@@ -68,3 +68,13 @@ output "ai_instance_id" {
   value       = aws_instance.ai.id
 }
 
+output "ai_analysis_private_ip" {
+  description = "staging AI 분석 인스턴스 private IP. BE의 AI_HTTP_URL에 쓴다"
+  value       = aws_instance.ai_analysis.private_ip
+}
+
+output "ai_analysis_instance_id" {
+  description = "AI 저장소 v2-staging Environment의 AI_ANALYSIS_INSTANCE_ID에 넣을 값"
+  value       = aws_instance.ai_analysis.id
+}
+

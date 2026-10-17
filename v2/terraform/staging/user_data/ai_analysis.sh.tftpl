@@ -1,0 +1,14 @@
+#!/bin/bash
+# staging AI 분석 인스턴스 초기 설정 (첫 부팅 때 1회 실행)
+# 실행에 필요한 도구만 설치한다. 분석(ai-analysis) 컨테이너와 nginx는 AI 저장소의 배포 workflow가 SSM으로 띄운다
+# (.github/scripts/deploy-v2-staging.sh). 실시간 STT(ai-live)는 ai 인스턴스(ai.tf)에서 따로 실행한다.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+# Docker와 AWS CLI 설치 (Ubuntu 26.04에는 AWS CLI apt 패키지가 없어 snap을 쓴다)
+apt-get update
+apt-get install -y docker.io
+snap install aws-cli --classic
+systemctl enable --now docker
+
+install -d -m 700 /opt/meety

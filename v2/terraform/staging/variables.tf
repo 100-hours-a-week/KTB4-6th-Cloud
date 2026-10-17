@@ -283,6 +283,12 @@ variable "ai_instance_type" {
   default     = "t3.small"
 }
 
+variable "ai_analysis_instance_type" {
+  description = "AI 분석 인스턴스 타입. 무중단 배포 때 신구 analysis 컨테이너 2개가 함께 뜬다. 실측 전이라 ai 인스턴스와 같은 t3.small(2GB)로 둔다"
+  type        = string
+  default     = "t3.small"
+}
+
 variable "ai_root_volume_size" {
   description = "AI 인스턴스 루트 볼륨 크기(GB)"
   type        = number

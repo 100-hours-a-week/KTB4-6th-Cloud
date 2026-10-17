@@ -54,8 +54,8 @@ resource "aws_ecs_task_definition" "be" {
       { name = "REDIS_PORT", value = "6379" },
       { name = "KAKAO_REDIRECT_URI", value = var.be_kakao_redirect_uri },
       { name = "CORS_ALLOWED_ORIGINS", value = join(",", var.fe_allowed_origins) },
-      # AI 인스턴스의 private IP로 직접 부른다 (ai-analysis 8001, ai-live 8000)
-      { name = "AI_HTTP_URL", value = "http://${aws_instance.ai.private_ip}:8001" },
+      # AI 인스턴스의 private IP로 직접 부른다 (분석은 ai_analysis 인스턴스 8001, 실시간 STT는 ai 인스턴스 8000)
+      { name = "AI_HTTP_URL", value = "http://${aws_instance.ai_analysis.private_ip}:8001" },
       { name = "AI_WEBSOCKET_URL", value = "ws://${aws_instance.ai.private_ip}:8000/v1/live-meeting" },
       { name = "AWS_S3_BUCKET", value = aws_s3_bucket.files.bucket },
       { name = "AWS_S3_REGION", value = var.region },

@@ -491,12 +491,13 @@ resource "aws_iam_role_policy" "gha_deploy_ai" {
     Version = "2012-10-17"
     Statement = [
       {
-        # staging AI 인스턴스에만, 셸 명령 문서로만 명령을 보낼 수 있다
+        # staging AI 인스턴스(live, analysis)에만, 셸 명령 문서로만 명령을 보낼 수 있다
         Sid    = "SendCommandToAi"
         Effect = "Allow"
         Action = "ssm:SendCommand"
         Resource = [
           aws_instance.ai.arn,
+          aws_instance.ai_analysis.arn,
           "arn:aws:ssm:${var.region}::document/AWS-RunShellScript",
         ]
       },

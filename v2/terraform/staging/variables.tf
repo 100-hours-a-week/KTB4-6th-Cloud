@@ -128,19 +128,37 @@ variable "be_migration_write_gate_enabled" {
 }
 
 variable "be_api_min_count" {
-  description = "be-api 최소 태스크 수 (설계 추정값, 부하 테스트 후 조정)"
+  description = "be-api 최소 태스크 수. 설계값은 2지만 staging은 사용량이 적어 1로 둔다 (부하 테스트 후 조정)"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "be_api_max_count" {
-  description = "be-api 최대 태스크 수 (설계 추정값, 부하 테스트 후 조정)"
+  description = "be-api 최대 태스크 수. 설계값은 5지만 staging은 3으로 둔다. 확장 실측 때는 5로 올린다"
   type        = number
-  default     = 5
+  default     = 3
 }
 
 variable "be_api_cpu_target" {
   description = "be-api 오토스케일링 목표 평균 CPU 사용률(%) (설계 추정값)"
+  type        = number
+  default     = 50
+}
+
+variable "be_realtime_min_count" {
+  description = "be-realtime 최소 태스크 수 (부하 테스트 후 조정)"
+  type        = number
+  default     = 1
+}
+
+variable "be_realtime_max_count" {
+  description = "be-realtime 최대 태스크 수 (부하 테스트 후 조정)"
+  type        = number
+  default     = 3
+}
+
+variable "be_realtime_cpu_target" {
+  description = "be-realtime 오토스케일링 목표 평균 CPU 사용률(%). be-api와 같은 값으로 시작하고, 연결 수와 CPU 관계를 실측한 뒤 기준을 다시 정한다"
   type        = number
   default     = 50
 }

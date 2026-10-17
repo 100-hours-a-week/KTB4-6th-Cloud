@@ -54,11 +54,11 @@ resource "aws_ecs_task_definition" "be" {
       { name = "REDIS_PORT", value = "6379" },
       { name = "KAKAO_REDIRECT_URI", value = var.be_kakao_redirect_uri },
       { name = "CORS_ALLOWED_ORIGINS", value = join(",", var.fe_allowed_origins) },
-      # AI 인스턴스의 private IP로 직접 부른다 (ai-analysis 8001, ai-live 8000)
-      { name = "AI_HTTP_URL", value = "http://${aws_instance.ai.private_ip}:8001" },
+      # AI 인스턴스의 private IP로 직접 부른다 (분석은 ai_analysis 인스턴스 8001, 실시간 STT는 ai 인스턴스 8000)
+      { name = "AI_HTTP_URL", value = "http://${aws_instance.ai_analysis.private_ip}:8001" },
       { name = "AI_WEBSOCKET_URL", value = "ws://${aws_instance.ai.private_ip}:8000/v1/live-meeting" },
-      { name = "AWS_S3_BUCKET", value = var.be_files_bucket },
-      { name = "AWS_S3_REGION", value = var.be_files_region },
+      { name = "AWS_S3_BUCKET", value = aws_s3_bucket.files.bucket },
+      { name = "AWS_S3_REGION", value = var.region },
       # V1 dev와 같은 JVM 힙 설정. 지정하지 않으면 컨테이너 메모리의 25%(512MB)만 힙으로 쓴다
       { name = "JAVA_TOOL_OPTIONS", value = "-Xmx1024m -Xms512m" },
       # V1 dev와 같이 DB에 연결되지 않아도 앱 기동은 성공하게 한다. 연결 상태는 헬스체크(/actuator/health)로 드러난다
@@ -74,6 +74,7 @@ resource "aws_ecs_task_definition" "be" {
       # 게이트가 닫힌 동안 쓰기 요청이 기다리는 최대 시간. 1차 리허설에서 기본값 10초로는 수동 전환 구간을 넘기지 못했다.
       # ALB 유휴 타임아웃(60초)과 부하 스크립트의 요청 타임아웃보다 짧게 둔다
       { name = "MIGRATION_WRITE_GATE_MAX_WAIT", value = "30s" },
+      { name = "AUTH_ACCESS_TOKEN_COOKIE_NAME", value = "staging_accessToken" },
     ]
 
     # 비밀값은 태스크가 시작할 때 ECS가 Parameter Store에서 읽어 넣는다 (실행 역할 권한).
@@ -121,7 +122,7 @@ resource "aws_ecs_service" "be_realtime" {
   name            = "${local.name_prefix}-be-realtime"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.be.arn
-  desired_count   = 1 # 연결이 서버 메모리에 있어 1개로 시작한다. 연결 수 기준 확장은 실측 후 정한다
+  desired_count   = var.be_realtime_min_count
 
   # Spot이 회수되면 진행 중인 회의 연결이 끊기므로 On-Demand만 쓴다
   capacity_provider_strategy {
@@ -174,9 +175,9 @@ resource "aws_ecs_service" "be_realtime" {
   enable_ecs_managed_tags = true
   propagate_tags          = "SERVICE"
 
-  # 배포할 버전(태스크 정의)은 CI/CD가 정한다. Terraform이 CI/CD가 배포한 버전을 되돌리지 않게 한다
+  # 배포할 버전(태스크 정의)은 CI/CD가, 태스크 수는 오토스케일링이 정한다
   lifecycle {
-    ignore_changes = [task_definition]
+    ignore_changes = [task_definition, desired_count]
   }
 
   # 전달 규칙이 먼저 있어야 대상 그룹이 ALB에 연결된 상태로 서비스를 만들 수 있다
@@ -272,6 +273,40 @@ resource "aws_appautoscaling_policy" "be_api_cpu" {
     target_value = var.be_api_cpu_target
 
     # 늘릴 때는 빨리, 줄일 때는 천천히 (설계값)
+    scale_out_cooldown = 60
+    scale_in_cooldown  = 300
+  }
+}
+
+# be-realtime 오토스케일링: be-api와 같은 CPU 기준으로 시작하고, 부하 테스트에서 연결 수와 CPU 관계를 본 뒤 기준을 다시 정한다.
+# 줄어드는 태스크의 회의는 FE가 남은 태스크로 다시 연결하고, 그 태스크가 AI 연결을 새로 맺어 이어진다(BE 확인, 2026-10-17).
+# 옮겨 가는 동안의 전사 누락 등 문제가 보이면 disable_scale_in으로 줄이는 동작만 막는다
+resource "aws_appautoscaling_target" "be_realtime" {
+  service_namespace  = "ecs"
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.be_realtime.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  min_capacity       = var.be_realtime_min_count
+  max_capacity       = var.be_realtime_max_count
+
+  tags = {
+    Name = "${local.name_prefix}-be-realtime"
+  }
+}
+
+resource "aws_appautoscaling_policy" "be_realtime_cpu" {
+  name               = "${local.name_prefix}-be-realtime-cpu"
+  service_namespace  = aws_appautoscaling_target.be_realtime.service_namespace
+  resource_id        = aws_appautoscaling_target.be_realtime.resource_id
+  scalable_dimension = aws_appautoscaling_target.be_realtime.scalable_dimension
+  policy_type        = "TargetTrackingScaling"
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+
+    target_value = var.be_realtime_cpu_target
+
     scale_out_cooldown = 60
     scale_in_cooldown  = 300
   }

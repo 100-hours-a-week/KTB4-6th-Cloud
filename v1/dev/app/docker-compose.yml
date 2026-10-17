@@ -125,6 +125,8 @@ services:
       OTEL_LOGS_EXPORTER: "none"
       OTEL_METRICS_EXPORTER: "none"
       OTEL_TRACES_EXPORTER: "none"
+      # 토큰
+      AUTH_ACCESS_TOKEN_COOKIE_NAME: "dev_accessToken"
     healthcheck:
       test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8080' || exit 1"]
       interval: 15s      # 15초마다 체크

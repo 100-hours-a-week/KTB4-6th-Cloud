@@ -43,16 +43,18 @@ resource "aws_security_group" "dev_data_migration" {
   }
 }
 
-resource "aws_vpc_security_group_ingress_rule" "dev_data_mysql_from_v2_staging_db" {
+# 서울의 리허설용 MySQL이 덤프와 복제를 위해 접속한다.
+# 처음에는 V2 staging DB(10.1.10.132)를 리허설에 썼으나, staging 앱 전용으로 되돌리면서 리허설용 인스턴스로 옮겼다 (2026-10-16)
+resource "aws_vpc_security_group_ingress_rule" "dev_data_mysql_from_v2_migration_db" {
   security_group_id = aws_security_group.dev_data_migration.id
-  description       = "MySQL from V2 staging DB over peering"
+  description       = "MySQL from V2 migration rehearsal DB over peering"
   ip_protocol       = "tcp"
   from_port         = 3306
   to_port           = 3306
-  cidr_ipv4         = "${var.v2_staging_db_ip}/32"
+  cidr_ipv4         = "${var.v2_migration_db_ip}/32"
 
   tags = {
-    Name    = "dev-data-mysql-from-v2-staging-db"
+    Name    = "dev-data-mysql-from-v2-migration-db"
     Service = "meety"
   }
 }

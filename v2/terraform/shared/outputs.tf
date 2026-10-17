@@ -77,3 +77,8 @@ output "dev_cert_arn" {
   description = "V1 dev 이전 리허설 인증서 ARN (발급 후 ALB HTTPS 리스너에 추가)"
   value       = aws_acm_certificate.dev.arn
 }
+
+output "prod_cert_arn" {
+  description = "V2 prod 인증서 ARN (ALB HTTPS 리스너에 추가됨)"
+  value       = aws_acm_certificate_validation.prod.certificate_arn
+}

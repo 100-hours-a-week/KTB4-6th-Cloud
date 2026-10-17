@@ -101,17 +101,6 @@ resource "aws_vpc_security_group_ingress_rule" "db_mysql_from_be" {
   to_port                      = 3306
 }
 
-# V1 dev DB 이전 리허설: 오하이오 dev-app의 ProxySQL이 전환 후 서울 DB에 접속한다.
-# 리전 간 피어링은 보안 그룹을 참조할 수 없어 사설 IP로 허용한다. 리허설이 끝나면 지운다
-resource "aws_vpc_security_group_ingress_rule" "db_mysql_from_v1_dev_proxysql" {
-  security_group_id = aws_security_group.db.id
-  description       = "MySQL from V1 dev-app ProxySQL (Ohio, VPC peering)"
-  cidr_ipv4         = "${var.v1_dev_app_private_ip}/32"
-  ip_protocol       = "tcp"
-  from_port         = 3306
-  to_port           = 3306
-}
-
 resource "aws_vpc_security_group_ingress_rule" "db_redis_from_be" {
   security_group_id            = aws_security_group.db.id
   description                  = "Redis from staging BE"
@@ -119,6 +108,16 @@ resource "aws_vpc_security_group_ingress_rule" "db_redis_from_be" {
   ip_protocol                  = "tcp"
   from_port                    = 6379
   to_port                      = 6379
+}
+
+# Read Replica가 Primary에서 복제받는다. 같은 보안 그룹끼리 MySQL 접속을 허용한다
+resource "aws_vpc_security_group_ingress_rule" "db_mysql_from_db" {
+  security_group_id            = aws_security_group.db.id
+  description                  = "MySQL replication between staging DB instances"
+  referenced_security_group_id = aws_security_group.db.id
+  ip_protocol                  = "tcp"
+  from_port                    = 3306
+  to_port                      = 3306
 }
 
 # 패키지와 이미지 받기, SSM 연결은 FE/NAT 인스턴스를 거쳐 인터넷으로 나간다
@@ -129,7 +128,7 @@ resource "aws_vpc_security_group_egress_rule" "db_all" {
   ip_protocol       = "-1"
 }
 
-# staging AI 보안 그룹: 실시간 STT(ai-live)와 분석(ai-analysis) 컨테이너가 같은 인스턴스에서 동작한다.
+# staging AI 보안 그룹: 실시간 STT(ai-live) 인스턴스에 붙인다. 분석(ai-analysis)은 ai_analysis 보안 그룹을 쓴다.
 # BE만 AI를 호출하므로 BE 보안 그룹에서 오는 요청만 받는다. SSH는 열지 않고 SSM으로 접속한다.
 resource "aws_security_group" "ai" {
   name        = "${local.name_prefix}-ai-sg"
@@ -150,8 +149,27 @@ resource "aws_vpc_security_group_ingress_rule" "ai_live_from_be" {
   to_port                      = 8000
 }
 
-resource "aws_vpc_security_group_ingress_rule" "ai_analysis_from_be" {
-  security_group_id            = aws_security_group.ai.id
+# 패키지와 이미지 받기, SSM 연결, BE 호출(ALB)은 FE/NAT 인스턴스를 거쳐 인터넷으로 나간다
+resource "aws_vpc_security_group_egress_rule" "ai_all" {
+  security_group_id = aws_security_group.ai.id
+  description       = "Outbound"
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
+}
+
+# staging AI 분석 인스턴스 보안 그룹: BE 보안 그룹에서 오는 분석 요청만 받는다. SSH는 열지 않고 SSM으로 접속한다.
+resource "aws_security_group" "ai_analysis" {
+  name        = "${local.name_prefix}-ai-analysis-sg"
+  description = "V2 staging AI analysis instance"
+  vpc_id      = local.shared.vpc_id
+
+  tags = {
+    Name = "${local.name_prefix}-ai-analysis-sg"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "ai_analysis_instance_from_be" {
+  security_group_id            = aws_security_group.ai_analysis.id
   description                  = "AI analysis HTTP from staging BE"
   referenced_security_group_id = aws_security_group.be.id
   ip_protocol                  = "tcp"
@@ -159,9 +177,9 @@ resource "aws_vpc_security_group_ingress_rule" "ai_analysis_from_be" {
   to_port                      = 8001
 }
 
-# 패키지와 이미지 받기, SSM 연결, BE 호출(ALB)은 FE/NAT 인스턴스를 거쳐 인터넷으로 나간다
-resource "aws_vpc_security_group_egress_rule" "ai_all" {
-  security_group_id = aws_security_group.ai.id
+# 패키지와 이미지 받기, SSM 연결, 외부 공급자(OpenRouter, Modal)와 BE 호출(ALB)은 FE/NAT 인스턴스를 거쳐 인터넷으로 나간다
+resource "aws_vpc_security_group_egress_rule" "ai_analysis_all" {
+  security_group_id = aws_security_group.ai_analysis.id
   description       = "Outbound"
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"

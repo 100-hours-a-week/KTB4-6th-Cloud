@@ -19,6 +19,18 @@ resource "aws_lb_listener_certificate" "dev" {
   certificate_arn = aws_acm_certificate_validation.dev.certificate_arn
 }
 
+# prod 인증서. 검증 레코드는 Route 53(route53.tf)에 만들므로, 그 레코드가 생긴 뒤 발급이 끝날 때까지 기다린다
+resource "aws_acm_certificate_validation" "prod" {
+  certificate_arn         = aws_acm_certificate.prod.arn
+  validation_record_fqdns = [for d in var.prod_domains : aws_route53_record.cert_validation_prod[d].fqdn]
+}
+
+# HTTPS 리스너에 prod 인증서를 추가한다. 도메인이 아직 오하이오를 가리켜 실제 요청은 오지 않는다
+resource "aws_lb_listener_certificate" "prod" {
+  listener_arn    = aws_lb_listener.https.arn
+  certificate_arn = aws_acm_certificate_validation.prod.certificate_arn
+}
+
 resource "aws_lb" "main" {
   name               = "${local.name_prefix}-alb"
   load_balancer_type = "application"
@@ -64,7 +76,7 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06" # TLS 1.2, 1.3만 허용
-  # prod 인증서는 prod 구성 때 aws_lb_listener_certificate로 추가한다
+  # 기본 인증서는 staging. dev, prod 인증서는 위의 aws_lb_listener_certificate로 추가한다
   certificate_arn = aws_acm_certificate_validation.staging.certificate_arn
 
   # 어떤 환경 규칙에도 맞지 않는 요청 (등록하지 않은 도메인, ALB 주소로 직접 접속 등)

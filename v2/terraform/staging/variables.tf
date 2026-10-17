@@ -223,6 +223,18 @@ variable "db_server_id" {
   default     = 2
 }
 
+variable "db_replica_private_ip" {
+  description = "Read Replica DB 사설 IP (private 서브넷 2c). 복제 설정이 이 주소를 쓰므로 인스턴스를 교체해도 바뀌지 않게 고정한다"
+  type        = string
+  default     = "10.1.11.132"
+}
+
+variable "db_replica_server_id" {
+  description = "Read Replica MySQL server_id. 복제하는 서버끼리 겹치면 안 된다 (V1 dev·prod 1, staging Primary 2, 리허설용 3, prod 4·5)"
+  type        = number
+  default     = 6
+}
+
 variable "db_mysql_image" {
   description = "MySQL 컨테이너 이미지. V1과 같은 8.4 계열을 패치 버전까지 고정한다"
   type        = string

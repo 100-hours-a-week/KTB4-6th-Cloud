@@ -110,6 +110,16 @@ resource "aws_vpc_security_group_ingress_rule" "db_redis_from_be" {
   to_port                      = 6379
 }
 
+# Read Replica가 Primary에서 복제받는다. 같은 보안 그룹끼리 MySQL 접속을 허용한다
+resource "aws_vpc_security_group_ingress_rule" "db_mysql_from_db" {
+  security_group_id            = aws_security_group.db.id
+  description                  = "MySQL replication between staging DB instances"
+  referenced_security_group_id = aws_security_group.db.id
+  ip_protocol                  = "tcp"
+  from_port                    = 3306
+  to_port                      = 3306
+}
+
 # 패키지와 이미지 받기, SSM 연결은 FE/NAT 인스턴스를 거쳐 인터넷으로 나간다
 resource "aws_vpc_security_group_egress_rule" "db_all" {
   security_group_id = aws_security_group.db.id

@@ -33,6 +33,16 @@ output "db_private_ip" {
   value       = aws_instance.db.private_ip
 }
 
+output "db_replica_private_ip" {
+  description = "staging Read Replica DB private IP. BE 읽기 분산 설정이 들어오면 BE에 넘긴다"
+  value       = aws_instance.db_replica.private_ip
+}
+
+output "db_replica_instance_id" {
+  description = "staging Read Replica DB 인스턴스 ID. SSM 접속에 쓴다"
+  value       = aws_instance.db_replica.id
+}
+
 output "migration_db_instance_id" {
   description = "DB 이전 리허설용 MySQL 인스턴스 ID. SSM 접속 대상이다"
   value       = aws_instance.migration_db.id

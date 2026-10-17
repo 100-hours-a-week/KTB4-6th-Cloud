@@ -64,6 +64,19 @@ resource "aws_route53_record" "cert_validation" {
   records = [each.value.resource_record_value]
 }
 
+# prod 인증서 검증 레코드 (2026-10-17).
+# 위 리소스에 합치면, 아직 만들지 않은 인증서의 값 때문에 기존 staging, dev 레코드까지 교체되는 것으로 계획된다.
+# 그래서 따로 두고, 목록은 이미 아는 도메인 변수로 정한다
+resource "aws_route53_record" "cert_validation_prod" {
+  for_each = toset(var.prod_domains)
+
+  zone_id = aws_route53_zone.main.zone_id
+  name    = one([for o in aws_acm_certificate.prod.domain_validation_options : o.resource_record_name if o.domain_name == each.key])
+  type    = one([for o in aws_acm_certificate.prod.domain_validation_options : o.resource_record_type if o.domain_name == each.key])
+  ttl     = 600
+  records = [one([for o in aws_acm_certificate.prod.domain_validation_options : o.resource_record_value if o.domain_name == each.key])]
+}
+
 # dev 레코드를 서울 ALB CNAME(alb)에서 오하이오 A 레코드(v1_dev)로 옮긴다.
 # 같은 이름에 CNAME과 A를 동시에 둘 수 없어, 새 리소스로 만들지 않고 기존 레코드를 수정하게 한다 (타입, 값, TTL을 한 번에 변경)
 moved {

@@ -19,6 +19,9 @@ const DURATION = __ENV.DURATION || '20m';
 // 팀별 하루 회의 생성 제한(dev 100, 삭제한 회의도 포함)보다 여유를 두고 팀을 넘긴다.
 const PER_TEAM = positiveInt('PER_TEAM', 90);
 const PASSWORD = __ENV.MIG_PASSWORD || `Mig!${RUN_ID}${Math.random().toString(36).slice(2, 10)}`;
+// BE가 인증 토큰을 읽는 쿠키 이름. 환경마다 다르다 (dev는 dev_accessToken, BE 기본값은 accessToken)
+const COOKIE_NAME = __ENV.COOKIE_NAME || 'dev_accessToken';
+if (!/^[A-Za-z0-9_]+$/.test(COOKIE_NAME)) throw new Error('COOKIE_NAME은 영문, 숫자, _만 허용합니다');
 
 const TOTAL_CYCLES = RATE * durationSeconds(DURATION);
 const ACCOUNT_COUNT = Math.ceil(TOTAL_CYCLES / PER_TEAM);
@@ -26,7 +29,7 @@ if (ACCOUNT_COUNT > 50) {
   throw new Error(`계정 ${ACCOUNT_COUNT}개가 필요합니다. RATE나 DURATION을 줄이세요 (최대 50개)`);
 }
 
-// 게이트 대기(최대 30초)와 리전 간 지연을 넉넉히 넘기도록 잡는다. ALB 유휴 타임아웃(60초)보다는 짧게 둔다.
+// 전환이 길어지면 프록시의 연결 확보 한도(새 모드 90초)보다 먼저 요청 실패로 드러나도록 한다.
 const REQUEST_TIMEOUT = '45s';
 
 const opDuration = new Trend('mig_op_duration', true);
@@ -41,12 +44,13 @@ export const options = {
       rate: RATE,
       timeUnit: '1s',
       duration: DURATION,
-      preAllocatedVUs: Math.max(10, RATE * 10),
-      // 사이클 하나가 게이트 대기로 30초 이상 걸릴 수 있어 그만큼 VU를 더 허용한다.
+      // 대기 구간에 VU를 뒤늦게 생성하느라 요청 자체를 누락하지 않도록 미리 확보한다.
+      preAllocatedVUs: Math.max(50, RATE * 40),
       maxVUs: Math.max(50, RATE * 40),
     },
   },
-  // 합격 기준은 verify.py 결과로 판단한다. 여기서는 threshold를 두지 않는다.
+  // DB 정합성은 verify.py에서 검사하며, HTTP 실패와 부하 생성 누락은 실행 자체도 실패시킨다.
+  thresholds: { mig_op_failures: ['count==0'], dropped_iterations: ['count==0'] },
 };
 
 export function setup() {
@@ -56,7 +60,9 @@ export function setup() {
     const loginId = `mig-${RUN_ID}-${String(i).padStart(2, '0')}`;
     const token = signupOrLogin(loginId);
     const teamId = createOrFindTeam(token, i);
-    accounts.push({ loginId, teamId, token });
+    // BE #282부터 회의 생성 때 참석자 지정이 필수다. 계정마다 팀원은 자기 자신 한 명이다
+    const teamMemberId = findTeamMemberId(token, teamId);
+    accounts.push({ loginId, teamId, teamMemberId, token });
   }
   log({ op: 'setup', accounts: accounts.length, totalCycles: TOTAL_CYCLES });
   return { accounts, password: PASSWORD };
@@ -77,6 +83,8 @@ export default function (data) {
     purpose: tag,
     note: `c-${seq}`,
     targetDurationMinutes: 30,
+    attendeeTeamMemberIds: [account.teamMemberId],
+    customAttendeeNames: [],
   });
   const meetingId = created.ok ? created.body.data.meetingId : null;
   if (!meetingId || lastStep === 'create') return;
@@ -105,7 +113,7 @@ function send(account, op, method, path, body) {
   const token = refreshedTokens[account.loginId] || account.token;
   const startedAt = Date.now();
   const res = http.request(method, `${BASE_URL}${path}`, body === null ? null : JSON.stringify(body), {
-    headers: { Cookie: `accessToken=${token}`, 'Content-Type': 'application/json' },
+    headers: { Cookie: `${COOKIE_NAME}=${token}`, 'Content-Type': 'application/json' },
     timeout: REQUEST_TIMEOUT,
     tags: { op },
   });
@@ -127,7 +135,7 @@ function relogin(account, data, seq) {
 
 function record(seq, op, meetingId, result) {
   opDuration.add(result.ms, { op });
-  if (!result.ok) opFailures.add(1, { op });
+  opFailures.add(result.ok ? 0 : 1, { op });
   log({
     op,
     seq,
@@ -161,8 +169,19 @@ function signupOrLogin(loginId) {
   return body.data.accessToken;
 }
 
+function findTeamMemberId(token, teamId) {
+  const res = http.get(`${BASE_URL}/api/v1/teams/${teamId}/members`,
+    { headers: { Cookie: `${COOKIE_NAME}=${token}` }, timeout: REQUEST_TIMEOUT });
+  const body = parse(res);
+  const members = res.status === 200 && body && body.data ? body.data.members : null;
+  if (!Array.isArray(members) || members.length === 0 || !Number.isSafeInteger(members[0].teamMemberId)) {
+    throw new Error(`팀 ${teamId} 팀원 조회 실패: HTTP ${res.status}`);
+  }
+  return members[0].teamMemberId;
+}
+
 function createOrFindTeam(token, index) {
-  const headers = { Cookie: `accessToken=${token}`, 'Content-Type': 'application/json' };
+  const headers = { Cookie: `${COOKIE_NAME}=${token}`, 'Content-Type': 'application/json' };
   // 팀 이름과 표시 이름은 한글·영문·숫자 2~10자만 허용된다.
   const res = http.post(`${BASE_URL}/api/v1/teams`,
     JSON.stringify({ name: `M${RUN_ID}${index}`, displayName: `Mig${index}` }),

@@ -33,3 +33,7 @@ v1/*/app/proxysql/data/
 # DB 이전 리허설 결과: k6 요청 기록과 서울 DB 조회 결과는 실행마다 로컬에만 둔다 (전환 로그는 위 *.log로 제외)
 v1/migration/ops-*.jsonl
 v1/migration/meetings-*.tsv
+v1/migration/live-*.tsv
+v1/migration/segments-*.tsv
+v1/migration/k6-*.out
+v1/migration/verify-*.txt

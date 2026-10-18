@@ -1,5 +1,5 @@
 # prod BE 서비스. BE 이미지를 prod profile로 실행한다.
-# 서울 prod DB에 데이터를 옮기기 전까지는 태스크를 띄우지 않는다 (var.be_services_enabled).
+# staging과 같이 기본 활성화한다. apply 전에 prod 파라미터와 DB 스키마를 준비한다.
 
 resource "aws_cloudwatch_log_group" "be" {
   name              = "/ecs/${local.name_prefix}/be"

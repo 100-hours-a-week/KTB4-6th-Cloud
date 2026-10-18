@@ -94,23 +94,23 @@ variable "be_realtime_paths" {
 variable "be_services_enabled" {
   description = <<-EOT
     BE 서비스(be-api, be-realtime)의 태스크를 띄울지 여부.
-    서울 prod DB는 오하이오 데이터를 옮기기 전까지 비어 있어, BE를 띄우면 스키마 검사(validate)에 실패해 계속 재시작한다.
-    false면 서비스와 오토스케일링 설정만 만들고 태스크 수를 0으로 둔다. DB 이전이 끝나면 true로 바꿔 apply한다
+    staging과 같이 기본 활성화한다. apply 시 각 서비스가 최소 태스크 수까지 기동한다.
+    기동 전에 prod 파라미터와 DB 스키마를 준비해야 한다. 임시로 중지할 때만 false로 두어 스케일링 범위를 0으로 만든다
   EOT
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "be_api_min_count" {
-  description = "be-api 최소 태스크 수 (설계 추정값, 부하 테스트 후 조정)"
+  description = "be-api 최소 태스크 수. 현재 staging과 같은 1로 시작하고, 부하 실측 후 조정한다"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "be_api_max_count" {
-  description = "be-api 최대 태스크 수 (설계 추정값, 부하 테스트 후 조정)"
+  description = "be-api 최대 태스크 수. 현재 staging과 같은 3으로 시작하고, 부하 실측 후 조정한다"
   type        = number
-  default     = 5
+  default     = 3
 }
 
 variable "be_api_cpu_target" {

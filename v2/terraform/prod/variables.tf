@@ -274,3 +274,28 @@ variable "ai_root_volume_size" {
   type        = number
   default     = 20
 }
+
+variable "gha_deploy_subjects" {
+  description = "prod BE 배포 역할을 쓸 수 있는 GitHub Actions 실행 위치 (저장소와 GitHub Environment). 이름이 바뀌어도 유지되는 ID 형식을 쓴다"
+  type        = list(string)
+  default = [
+    "repo:100-hours-a-week@167328634/KTB4-6th-BE@1344634945:environment:production",
+    "repo:100-hours-a-week@167328634/KTB4-6th-BE@1344634945:environment:production-migration-approval",
+  ]
+}
+
+variable "gha_deploy_fe_subjects" {
+  description = "prod FE 배포 역할을 쓸 수 있는 GitHub Actions 실행 위치 (저장소와 GitHub Environment)"
+  type        = list(string)
+  default = [
+    "repo:100-hours-a-week@167328634/KTB4-6th-FE@1344634298:environment:production",
+  ]
+}
+
+variable "gha_deploy_ai_subjects" {
+  description = "prod AI 배포 역할을 쓸 수 있는 GitHub Actions 실행 위치 (저장소와 GitHub Environment)"
+  type        = list(string)
+  default = [
+    "repo:100-hours-a-week@167328634/KTB4-6th-AI@1344635474:environment:production",
+  ]
+}

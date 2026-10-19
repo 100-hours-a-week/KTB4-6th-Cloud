@@ -1,0 +1,51 @@
+#!/bin/bash
+# 모니터링 서버 초기 설정. Grafana 관리자 비밀번호는 첫 부팅 때 서버 역할로 읽고 state에는 넣지 않는다.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y docker.io docker-compose-v2
+snap install aws-cli --classic
+systemctl enable --now docker
+
+# 2GB 메모리에서 세 컨테이너가 함께 돌기 때문에, 순간적인 메모리 부족에 대비해 swap 1GB를 둔다
+if [ ! -f /swapfile ]; then
+  fallocate -l 1G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+install -d -m 755 /opt/meety/monitoring
+cd /opt/meety/monitoring
+
+cat > docker-compose.yml <<'MEETY_EOF'
+${compose}
+MEETY_EOF
+
+cat > prometheus.yml <<'MEETY_EOF'
+${prometheus_config}
+MEETY_EOF
+
+cat > loki.yml <<'MEETY_EOF'
+${loki_config}
+MEETY_EOF
+
+cat > grafana-datasources.yml <<'MEETY_EOF'
+${grafana_datasources}
+MEETY_EOF
+
+umask 077
+GRAFANA_ADMIN_PASSWORD=$(/snap/bin/aws ssm get-parameter --region '${region}' \
+  --name '${parameter_name}' --with-decryption --query Parameter.Value --output text)
+[ -n "$GRAFANA_ADMIN_PASSWORD" ] || { echo 'Grafana 관리자 비밀번호가 비어 있습니다'; exit 1; }
+# Grafana가 파일에서 읽는다(GF_SECURITY_ADMIN_PASSWORD__FILE). 값은 로그에 출력하지 않는다
+printf '%s' "$GRAFANA_ADMIN_PASSWORD" > grafana_admin_password
+unset GRAFANA_ADMIN_PASSWORD
+# Grafana 컨테이너 사용자(UID 472)만 읽을 수 있게 한다
+chown 472:0 grafana_admin_password
+chmod 400 grafana_admin_password
+umask 022
+
+docker compose up -d --wait --wait-timeout 300

@@ -1,0 +1,21 @@
+# 환경별 모니터링 서버의 Prometheus 설정. Terraform이 env 값을 넣어 서버로 보낸다.
+# 1단계는 모니터링 구성 요소만 수집한다. BE, EC2, DB 수집 대상은 다음 단계에서 추가한다.
+global:
+  # t3.small 한 대에서 메트릭 15일을 보관하므로 수집 간격을 30초로 둔다
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    env: ${env}
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: loki
+    static_configs:
+      - targets: ["loki:3100"]
+
+  - job_name: grafana
+    static_configs:
+      - targets: ["grafana:3000"]

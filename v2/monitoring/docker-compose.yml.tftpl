@@ -1,0 +1,71 @@
+# 환경별 모니터링 서버. Prometheus, Loki, Grafana를 한 서버에서 실행한다.
+# t3.small(2GB)에서 함께 돌기 때문에 컨테이너마다 메모리 상한을 둔다.
+services:
+  prometheus:
+    image: ${prometheus_image}
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      # 설정을 바꾼 뒤 재시작 없이 다시 읽는다 (POST /-/reload)
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    # 서버 안에서만 조회한다. Grafana는 compose 네트워크로 접근한다
+    ports:
+      - "127.0.0.1:9090:9090"
+    mem_limit: 700m
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  loki:
+    image: ${loki_image}
+    container_name: loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    # 다른 서버의 로그 수집기가 보낸다. 접근은 보안 그룹으로 제한한다
+    ports:
+      - "3100:3100"
+    mem_limit: 600m
+    logging: *logging
+
+  grafana:
+    image: ${grafana_image}
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      GF_SERVER_ROOT_URL: https://${grafana_domain}
+      GF_SECURITY_ADMIN_USER: admin
+      # 비밀번호는 파일에서 읽는다. 환경 변수로 넘기면 compose가 값의 $를 변수로 해석할 수 있다
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./grafana_admin_password:/run/secrets/grafana_admin_password:ro
+      - grafana_data:/var/lib/grafana
+    # ALB가 이 포트로 보낸다. 접근은 보안 그룹으로 ALB만 허용한다
+    ports:
+      - "3000:3000"
+    mem_limit: 350m
+    logging: *logging
+    depends_on:
+      - prometheus
+      - loki
+
+volumes:
+  prometheus_data:
+  loki_data:
+  grafana_data:

@@ -29,7 +29,7 @@ output "be_log_group" {
 }
 
 output "db_private_ips" {
-  description = "prod DB 인스턴스 private IP (primary, replica). BE의 DB_HOST, REDIS_HOST는 primary를 쓴다"
+  description = "prod DB 인스턴스 private IP (primary, replica). BE의 DB_HOST는 primary를 쓴다"
   value       = { for k, v in aws_instance.db : k => v.private_ip }
 }
 

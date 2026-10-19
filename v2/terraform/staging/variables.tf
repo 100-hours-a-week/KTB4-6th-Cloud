@@ -373,7 +373,7 @@ variable "redis_maxmemory_mb" {
 variable "redis_use_dedicated_instance" {
   description = "데이터 복제와 전환 준비가 끝나면 true로 바꾸어 BE 태스크 템플릿에 전용 Redis 주소를 반영한다"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "redis_migration_access_enabled" {

@@ -12,15 +12,20 @@ resource "aws_route53_zone" "main" {
   }
 }
 
-# V1 prod (오하이오 app 인스턴스의 탄력적 IP). V1 prod를 정리할 때 함께 바꾼다
+# prod를 서울 ALB로 전환한다. 기존 리소스 주소를 유지해 두 레코드를 제자리에서 수정한다.
+# DB 승격과 서울 애플리케이션 검증을 마친 뒤 plan을 확인하고 적용한다.
 resource "aws_route53_record" "v1_prod" {
   for_each = toset(["", "api"])
 
   zone_id = aws_route53_zone.main.zone_id
   name    = each.value == "" ? aws_route53_zone.main.name : "${each.value}.${aws_route53_zone.main.name}"
   type    = "A"
-  ttl     = 1800
-  records = ["3.136.17.161"]
+  # 루트 도메인도 지원하는 ALB 별칭을 쓴다. TTL은 ALB 별칭의 값을 따른다.
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
+    evaluate_target_health = true
+  }
 }
 
 # V1 dev (오하이오 dev-app 인스턴스의 탄력적 IP).

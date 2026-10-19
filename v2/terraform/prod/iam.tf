@@ -311,7 +311,205 @@ resource "aws_iam_role_policy_attachment" "ecs_infrastructure" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonECSInfrastructureRolePolicyForLoadBalancers"
 }
 
-# GitHub Actions 배포 역할(BE, FE, AI)은 prod CI/CD를 붙일 때 만든다 (2026-10-17 결정)
+# GitHub Actions 배포 역할: BE 저장소의 지정한 GitHub Environment에서 실행될 때만 쓸 수 있다.
+# 새 태스크 정의를 등록하고 prod BE 서비스에 배포하는 권한만 준다. DB, Terraform, 다른 서비스 권한은 없다
+resource "aws_iam_role" "gha_deploy" {
+  name = "${local.name_prefix}-gha-deploy"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn }
+      Action    = ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = var.gha_deploy_subjects
+        }
+      }
+    }]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-gha-deploy"
+  }
+}
+
+resource "aws_iam_role_policy" "gha_deploy" {
+  name = "deploy-be"
+  role = aws_iam_role.gha_deploy.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # 태스크 정의 조회와 등록은 리소스 단위로 제한할 수 없다
+        Sid      = "RegisterTaskDefinition"
+        Effect   = "Allow"
+        Action   = ["ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition"]
+        Resource = "*"
+      },
+      {
+        # 등록하는 태스크 정의에 Service=meety 등 태그를 붙일 때만 허용한다
+        Sid      = "TagOnRegister"
+        Effect   = "Allow"
+        Action   = "ecs:TagResource"
+        Resource = "*"
+        Condition = {
+          StringEquals = { "ecs:CreateAction" = "RegisterTaskDefinition" }
+        }
+      },
+      {
+        Sid      = "DeployBeService"
+        Effect   = "Allow"
+        Action   = ["ecs:UpdateService", "ecs:DescribeServices"]
+        Resource = [aws_ecs_service.be_realtime.id, aws_ecs_service.be_api.id]
+      },
+      {
+        # prod 배포 진행 상황 조회. 실패 시 롤백은 ECS 배포 설정이 수행한다
+        Sid      = "ServiceDeployments"
+        Effect   = "Allow"
+        Action   = ["ecs:ListServiceDeployments", "ecs:DescribeServiceDeployments"]
+        Resource = "*"
+      },
+      {
+        # 새 태스크 정의에 들어가는 실행 역할과 태스크 역할을 ECS에 넘길 때만 허용한다
+        Sid      = "PassTaskRoles"
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
+        Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.be_task.arn]
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
+        }
+      },
+      {
+        Sid      = "ReadTaskTemplate"
+        Effect   = "Allow"
+        Action   = "ssm:GetParameter"
+        Resource = aws_ssm_parameter.be_task_template.arn
+      },
+    ]
+  })
+}
+
+# FE GitHub Actions 배포 역할: FE 저장소의 production Environment에서 실행될 때만 쓸 수 있다.
+# FE 인스턴스에 배포 명령을 보내고, FE 대상 그룹에 등록하는 포트를 바꾸는 권한만 준다
+resource "aws_iam_role" "gha_deploy_fe" {
+  name = "${local.name_prefix}-gha-deploy-fe"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn }
+      Action    = ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = var.gha_deploy_fe_subjects
+        }
+      }
+    }]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-gha-deploy-fe"
+  }
+}
+
+resource "aws_iam_role_policy" "gha_deploy_fe" {
+  name = "deploy-fe"
+  role = aws_iam_role.gha_deploy_fe.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # prod FE 인스턴스에만, 셸 명령 문서로만 명령을 보낼 수 있다
+        Sid    = "SendCommandToFe"
+        Effect = "Allow"
+        Action = "ssm:SendCommand"
+        Resource = [
+          aws_instance.fe.arn,
+          "arn:aws:ssm:${var.region}::document/AWS-RunShellScript",
+        ]
+      },
+      {
+        Sid      = "ReadCommandResult"
+        Effect   = "Allow"
+        Action   = "ssm:GetCommandInvocation"
+        Resource = "*"
+      },
+      {
+        Sid      = "SwitchFeTarget"
+        Effect   = "Allow"
+        Action   = ["elasticloadbalancing:RegisterTargets", "elasticloadbalancing:DeregisterTargets"]
+        Resource = aws_lb_target_group.fe.arn
+      },
+      {
+        # 대상 그룹 이름으로 ARN 찾기와 대상 상태 조회는 리소스 단위로 제한할 수 없다
+        Sid      = "ReadTargets"
+        Effect   = "Allow"
+        Action   = ["elasticloadbalancing:DescribeTargetGroups", "elasticloadbalancing:DescribeTargetHealth"]
+        Resource = "*"
+      },
+    ]
+  })
+}
+
+# AI GitHub Actions 배포 역할: AI 저장소의 production Environment에서 실행될 때만 쓸 수 있다.
+# AI 인스턴스에 배포 명령을 보내는 권한만 준다. 공급자 키는 인스턴스가 자기 역할로 직접 읽는다
+resource "aws_iam_role" "gha_deploy_ai" {
+  name = "${local.name_prefix}-gha-deploy-ai"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn }
+      Action    = ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = var.gha_deploy_ai_subjects
+        }
+      }
+    }]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-gha-deploy-ai"
+  }
+}
+
+resource "aws_iam_role_policy" "gha_deploy_ai" {
+  name = "deploy-ai"
+  role = aws_iam_role.gha_deploy_ai.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # prod AI 인스턴스(live, analysis)에만, 셸 명령 문서로만 명령을 보낼 수 있다
+        Sid    = "SendCommandToAi"
+        Effect = "Allow"
+        Action = "ssm:SendCommand"
+        Resource = [
+          aws_instance.ai.arn,
+          aws_instance.ai_analysis.arn,
+          "arn:aws:ssm:${var.region}::document/AWS-RunShellScript",
+        ]
+      },
+      {
+        Sid      = "ReadCommandResult"
+        Effect   = "Allow"
+        Action   = "ssm:GetCommandInvocation"
+        Resource = "*"
+      },
+    ]
+  })
+}
 
 # 인스턴스 역할이 자기 경로 밖의 파라미터를 읽지 못하게 막는다 (2026-10-12)
 # AmazonSSMManagedInstanceCore가 ssm:GetParameter(s)를 모든 파라미터(*)에 허용하므로, 위의 읽기 허용 범위만으로는 막을 수 없다.

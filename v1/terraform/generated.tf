@@ -808,7 +808,7 @@ resource "aws_instance" "prod_data" {
     Service = "meety"
   }
   tenancy                = "default"
-  vpc_security_group_ids = ["sg-016d5ef2c40006305", "sg-0769decbce98ab96b"]
+  vpc_security_group_ids = ["sg-016d5ef2c40006305", "sg-0769decbce98ab96b", aws_security_group.prod_data_migration.id]
   capacity_reservation_specification {
     capacity_reservation_preference = "open"
   }

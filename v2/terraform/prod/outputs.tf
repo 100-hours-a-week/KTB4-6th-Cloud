@@ -72,3 +72,18 @@ output "fe_target_group_name" {
   description = "FE 배포 workflow가 대상을 등록하는 대상 그룹 이름"
   value       = aws_lb_target_group.fe.name
 }
+
+output "gha_deploy_role_arn" {
+  description = "GitHub production BE 배포 역할 ARN. AWS_ROLE_ARN 시크릿에 등록한다"
+  value       = aws_iam_role.gha_deploy.arn
+}
+
+output "gha_deploy_fe_role_arn" {
+  description = "GitHub production FE 배포 역할 ARN. AWS_ROLE_ARN 시크릿에 등록한다"
+  value       = aws_iam_role.gha_deploy_fe.arn
+}
+
+output "gha_deploy_ai_role_arn" {
+  description = "GitHub production AI 배포 역할 ARN. AWS_ROLE_ARN 시크릿에 등록한다"
+  value       = aws_iam_role.gha_deploy_ai.arn
+}

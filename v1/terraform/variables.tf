@@ -14,3 +14,9 @@ variable "ssh_allowed_cidr" {
   description = "SSH(22) 접속을 허용할 CIDR"
   type        = string
 }
+
+variable "v2_prod_db_ip" {
+  description = "서울 prod Primary 사설 IP. 오하이오 prod DB 덤프와 복제 접속을 이 주소에서만 허용한다"
+  type        = string
+  default     = "10.1.20.132"
+}

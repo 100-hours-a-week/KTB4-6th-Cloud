@@ -58,3 +58,30 @@ resource "aws_vpc_security_group_ingress_rule" "dev_data_mysql_from_v2_migration
     Service = "meety"
   }
 }
+
+# prod는 dev와 별도의 보안 그룹으로 서울 Primary 한 대의 복제 접속만 허용한다.
+# 기존 data-sg-v1은 dev와 공유하므로 변경하지 않는다.
+resource "aws_security_group" "prod_data_migration" {
+  name        = "prod-data-migration-sg-v1"
+  description = "V2 prod primary dumps and replicates prod MySQL"
+  vpc_id      = aws_vpc.main.id
+
+  tags = {
+    Name    = "prod-data-migration-sg-v1"
+    Service = "meety"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "prod_data_mysql_from_v2_primary" {
+  security_group_id = aws_security_group.prod_data_migration.id
+  description       = "MySQL from V2 prod primary over peering"
+  ip_protocol       = "tcp"
+  from_port         = 3306
+  to_port           = 3306
+  cidr_ipv4         = "${var.v2_prod_db_ip}/32"
+
+  tags = {
+    Name    = "prod-data-mysql-from-v2-primary"
+    Service = "meety"
+  }
+}

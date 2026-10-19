@@ -1,4 +1,4 @@
-"""write-load.js, live-load.js 요청 기록과 서울 DB 조회 결과를 대조해 데이터 정합성과 지연을 정리한다.
+"""write-load.js, live-load.js 요청 기록과 리허설 대상 DB 조회 결과를 대조해 데이터 정합성과 지연을 정리한다.
 
 사용법은 README.md 참고.
     python3 verify.py --run r1018a --ops ops-r1018a.jsonl --db meetings-r1018a.tsv --live live-r1018a.tsv \

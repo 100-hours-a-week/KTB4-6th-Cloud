@@ -4,7 +4,7 @@ import { Counter, Trend } from 'k6/metrics';
 import { loadBaseUrl } from '../load-test/common.js';
 
 // DB 이전 리허설 동안 회의 생성 → 수정 → 삭제를 일정한 속도로 반복한다.
-// 요청마다 결과를 한 줄 JSON으로 남기고, 전환 후 verify.py가 서울 DB와 대조한다.
+// 요청마다 결과를 한 줄 JSON으로 남기고, 전환 후 verify.py가 리허설 대상 DB와 대조한다.
 // 사용법은 README.md 참고.
 
 const RUN_ID = __ENV.RUN_ID || '';
@@ -16,6 +16,8 @@ const BASE_URL = loadBaseUrl();
 // 초당 시작할 회의 사이클 수. 전환 구간에 요청이 끊기지 않을 정도면 충분하다.
 const RATE = positiveInt('RATE', 2);
 const DURATION = __ENV.DURATION || '20m';
+// REST 집중 실험은 회의마다 목록·상세 조회를 추가한다. 기존 쓰기 실험 기본값은 유지한다.
+const INCLUDE_READS = __ENV.INCLUDE_READS === 'YES';
 // 팀별 하루 회의 생성 제한(dev 100, 삭제한 회의도 포함)보다 여유를 두고 팀을 넘긴다.
 const PER_TEAM = positiveInt('PER_TEAM', 90);
 const PASSWORD = __ENV.MIG_PASSWORD || `Mig!${RUN_ID}${Math.random().toString(36).slice(2, 10)}`;
@@ -87,7 +89,12 @@ export default function (data) {
     customAttendeeNames: [],
   });
   const meetingId = created.ok ? created.body.data.meetingId : null;
-  if (!meetingId || lastStep === 'create') return;
+  if (!meetingId) return;
+  if (INCLUDE_READS) {
+    call(account, data, seq, 'detail', 'GET', `/api/v1/meetings/${meetingId}`, null, meetingId);
+    call(account, data, seq, 'list', 'GET', `/api/v1/teams/${account.teamId}/meetings`, null, meetingId);
+  }
+  if (lastStep === 'create') return;
 
   const patched = call(account, data, seq, 'patch', 'PATCH', `/api/v1/meetings/${meetingId}`, { note: `u-${seq}` }, meetingId);
   if (!patched.ok || lastStep === 'patch') return;
@@ -95,7 +102,7 @@ export default function (data) {
   call(account, data, seq, 'delete', 'DELETE', `/api/v1/meetings/${meetingId}`, null, meetingId);
 }
 
-const EXPECTED_STATUS = { create: 201, patch: 200, delete: 204, relogin: 200 };
+const EXPECTED_STATUS = { create: 201, patch: 200, delete: 204, detail: 200, list: 200, relogin: 200 };
 
 function call(account, data, seq, op, method, path, body, meetingId = null) {
   let result = send(account, op, method, path, body);

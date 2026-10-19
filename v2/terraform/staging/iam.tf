@@ -519,9 +519,7 @@ locals {
   instance_param_allow = {
     fe = { role = aws_iam_role.fe.id, paths = ["fe", "fe/*"] }
     db = { role = aws_iam_role.db.id, paths = ["db", "db/*"] }
-    # DB 이전 리허설용 인스턴스 (migration_db.tf)
-    migration_db = { role = aws_iam_role.migration_db.id, paths = ["migration-db", "migration-db/*"] }
-    ai           = { role = aws_iam_role.ai.id, paths = ["ai", "ai/*", "be/INTERNAL_API_KEY"] }
+    ai = { role = aws_iam_role.ai.id, paths = ["ai", "ai/*", "be/INTERNAL_API_KEY"] }
   }
 }
 

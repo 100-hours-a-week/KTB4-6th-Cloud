@@ -41,7 +41,7 @@ resource "aws_ecs_task_definition" "be" {
       protocol      = "tcp"
     }]
 
-    # 비밀값이 아닌 설정. DB와 Redis 주소는 DB 인스턴스의 private IP를 참조한다
+    # 비밀값이 아닌 설정. DB와 Redis 주소는 각각의 접속 대상을 참조한다
     environment = [
       { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
       # prod profile 기본값(update) 대신 validate로 두어, 엔티티와 스키마 차이를 기동 실패로 드러낸다. 스키마 변경은 Flyway로 한다
@@ -51,7 +51,7 @@ resource "aws_ecs_task_definition" "be" {
       # 읽기 분산(Read Replica)은 BE 설정이 정해지면 추가한다. 지금은 Primary만 쓴다
       { name = "DB_HOST", value = aws_instance.db["primary"].private_ip },
       { name = "DB_PORT", value = "3306" },
-      { name = "REDIS_HOST", value = aws_instance.db["primary"].private_ip },
+      { name = "REDIS_HOST", value = local.be_redis_host },
       { name = "REDIS_PORT", value = "6379" },
       { name = "KAKAO_REDIRECT_URI", value = var.be_kakao_redirect_uri },
       { name = "CORS_ALLOWED_ORIGINS", value = join(",", var.fe_allowed_origins) },

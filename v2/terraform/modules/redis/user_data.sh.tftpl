@@ -1,0 +1,94 @@
+#!/bin/bash
+# Redis 전용 서버 초기 설정. 비밀값은 첫 부팅 때 서버 역할로 읽고 state에는 넣지 않는다.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y docker.io docker-compose-v2
+snap install aws-cli --classic
+systemctl enable --now docker
+
+# AOF 재작성과 초기 복제의 fork에 필요한 메모리 예약 정책을 설정한다.
+printf 'vm.overcommit_memory = 1\n' > /etc/sysctl.d/99-meety-redis.conf
+sysctl -p /etc/sysctl.d/99-meety-redis.conf
+
+install -d -m 700 /opt/meety
+umask 077
+REDIS_PASSWORD=$(/snap/bin/aws ssm get-parameter --region '${region}' \
+  --name '${parameter_name}' --with-decryption --query Parameter.Value --output text)
+[ -n "$REDIS_PASSWORD" ] || { echo 'Redis 비밀번호가 비어 있습니다'; exit 1; }
+export REDIS_PASSWORD
+
+docker pull '${redis_image}'
+# 이미지의 실제 Redis UID/GID를 확인한다. CONFIG REWRITE가 설정 파일을 교체할 수 있어야 한다.
+REDIS_UID=$(docker run --rm --entrypoint id '${redis_image}' -u redis)
+REDIS_GID=$(docker run --rm --entrypoint id '${redis_image}' -g redis)
+install -d -m 700 -o "$REDIS_UID" -g "$REDIS_GID" /opt/meety/redis-conf
+
+cat > /opt/meety/redis-conf/redis.conf <<'CONF'
+bind 0.0.0.0
+port 6379
+protected-mode yes
+requirepass __REDIS_PASSWORD__
+dir /data
+# 토큰 차단 목록과 녹음 상태를 컨테이너 재시작 뒤에도 복원한다. 최대 약 1초의 기록 손실 가능성은 있다.
+appendonly yes
+appendfsync everysec
+save ""
+maxmemory ${maxmemory_mb}mb
+# 로그아웃 토큰 등의 키를 메모리 부족 때문에 임의로 지우지 않는다.
+maxmemory-policy noeviction
+CONF
+
+cat > /opt/meety/docker-compose.yml <<'COMPOSE'
+services:
+  redis:
+    container_name: ${container_name}
+    image: ${redis_image}
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    environment:
+      # 인증한 PING으로 헬스체크한다. 값이 담긴 compose 파일은 root만 읽을 수 있다.
+      REDISCLI_AUTH: __REDIS_AUTH__
+    volumes:
+      # 디렉터리를 마운트해야 CONFIG REWRITE의 파일 교체가 가능하다.
+      - ./redis-conf:/usr/local/etc/redis
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", 'test "$$(redis-cli --no-auth-warning ping)" = PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  redis_data:
+COMPOSE
+
+# 설정 형식별로 비밀값을 이스케이프한다. 값·렌더링 결과는 로그에 출력하지 않는다.
+python3 - <<'PY'
+import json
+import os
+import pathlib
+
+password = os.environ["REDIS_PASSWORD"]
+config = pathlib.Path("/opt/meety/redis-conf/redis.conf")
+# Redis 설정의 따옴표 안에서 UTF-8 바이트를 안전하게 표현한다.
+quoted = '"' + ''.join('\\x%02x' % byte for byte in password.encode()) + '"'
+config.write_text(config.read_text().replace("__REDIS_PASSWORD__", quoted))
+compose = pathlib.Path("/opt/meety/docker-compose.yml")
+compose.write_text(compose.read_text().replace("__REDIS_AUTH__", json.dumps(password, ensure_ascii=False).replace('$', '$$')))
+PY
+unset REDIS_PASSWORD
+chown "$REDIS_UID:$REDIS_GID" /opt/meety/redis-conf/redis.conf
+chmod 600 /opt/meety/redis-conf/redis.conf /opt/meety/docker-compose.yml
+
+cd /opt/meety
+docker compose up -d --wait --wait-timeout 180

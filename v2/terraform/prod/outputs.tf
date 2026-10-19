@@ -29,7 +29,7 @@ output "be_log_group" {
 }
 
 output "db_private_ips" {
-  description = "prod DB 인스턴스 private IP (primary, replica). BE의 DB_HOST, REDIS_HOST는 primary를 쓴다"
+  description = "prod DB 인스턴스 private IP (primary, replica). BE의 DB_HOST는 primary를 쓴다"
   value       = { for k, v in aws_instance.db : k => v.private_ip }
 }
 
@@ -86,4 +86,19 @@ output "gha_deploy_fe_role_arn" {
 output "gha_deploy_ai_role_arn" {
   description = "GitHub production AI 배포 역할 ARN. AWS_ROLE_ARN 시크릿에 등록한다"
   value       = aws_iam_role.gha_deploy_ai.arn
+}
+
+output "redis_instance_id" {
+  description = "Redis 전용 인스턴스 ID. SSM 접속과 데이터 이전에 사용한다"
+  value       = module.redis.instance_id
+}
+
+output "redis_private_ip" {
+  description = "Redis 전용 사설 IP. 실제 BE 접속 전환 여부는 be_redis_host 출력으로 확인한다"
+  value       = module.redis.private_ip
+}
+
+output "be_redis_host" {
+  description = "CI/CD용 BE 태스크 템플릿에 반영할 Redis 주소. 실행 중인 태스크의 전환은 배포로 확인한다"
+  value       = local.be_redis_host
 }

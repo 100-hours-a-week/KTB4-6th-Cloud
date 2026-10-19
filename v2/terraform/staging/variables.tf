@@ -338,3 +338,46 @@ variable "gha_deploy_ai_subjects" {
   ]
 }
 
+
+# Redis 분리는 서버 생성과 BE 접속 전환을 나눠 진행한다.
+variable "redis_ami_id" {
+  description = "Redis 전용 AMI. 기존 DB와 같은 Ubuntu 26.04 arm64이며 변경 시 Redis 인스턴스가 교체된다"
+  type        = string
+  default     = "ami-01e3230cee0cae555"
+}
+
+variable "redis_instance_type" {
+  description = "현재 저부하 사용량을 기준으로 시작하는 Redis 전용 타입. 피크 처리 용량은 실측 전이다"
+  type        = string
+  default     = "t4g.small"
+}
+
+variable "redis_root_volume_size" {
+  description = "Redis 설정·AOF와 Docker를 저장할 암호화 루트 볼륨 크기(GB)"
+  type        = number
+  default     = 10
+}
+
+variable "redis_private_ip" {
+  description = "전용 Redis의 고정 사설 IP. 환경별 private 서브넷 2a에서 사용한다"
+  type        = string
+  default     = "10.1.10.133"
+}
+
+variable "redis_maxmemory_mb" {
+  description = "Redis 데이터 메모리 상한(MB). 키를 임의로 지우지 않도록 noeviction을 쓴다"
+  type        = number
+  default     = 512
+}
+
+variable "redis_use_dedicated_instance" {
+  description = "데이터 복제와 전환 준비가 끝나면 true로 바꾸어 BE 태스크 템플릿에 전용 Redis 주소를 반영한다"
+  type        = bool
+  default     = true
+}
+
+variable "redis_migration_access_enabled" {
+  description = "기존 DB 서버 Redis에서 전용 Redis로 복제할 임시 접속 허용. 이전 검증 후 false로 닫는다"
+  type        = bool
+  default     = true
+}

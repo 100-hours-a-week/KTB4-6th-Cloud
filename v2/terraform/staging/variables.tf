@@ -402,7 +402,7 @@ variable "monitoring_images" {
     grafana    = string
   })
   default = {
-    prometheus = "prom/prometheus:v3.2.1"
+    prometheus = "prom/prometheus:v3.15.0"
     loki       = "grafana/loki:3.4.2"
     grafana    = "grafana/grafana:11.5.2"
   }

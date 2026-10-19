@@ -189,6 +189,9 @@ resource "aws_ecs_service" "be_realtime" {
 }
 
 resource "aws_ecs_service" "be_api" {
+  # API 설정 변경 뒤 새 태스크가 정상 기동했는지 기다린다.
+  wait_for_steady_state = true
+
   name            = "${local.name_prefix}-be-api"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.be.arn

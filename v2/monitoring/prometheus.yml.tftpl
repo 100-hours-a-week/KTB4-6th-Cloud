@@ -1,5 +1,5 @@
 # 환경별 모니터링 서버의 Prometheus 설정. Terraform이 env 값을 넣어 서버로 보낸다.
-# 1단계는 모니터링 구성 요소만 수집한다. BE, EC2, DB 수집 대상은 다음 단계에서 추가한다.
+# 서버에 반영할 때는 v2/monitoring/sync-config.sh를 쓴다 (user_data는 첫 부팅 때만 사용).
 global:
   # t3.small 한 대에서 메트릭 15일을 보관하므로 수집 간격을 30초로 둔다
   scrape_interval: 30s
@@ -19,3 +19,36 @@ scrape_configs:
   - job_name: grafana
     static_configs:
       - targets: ["grafana:3000"]
+
+  # Prometheus 3.8 이상 내장 ECS 탐색. 사설 IP로 직접 수집하며 ALB나 Cloud Map은 사용하지 않는다.
+  # BE의 관리 포트 분리는 보류했으므로 일반 API와 같은 8080을 사용한다.
+  - job_name: be
+    metrics_path: /actuator/prometheus
+    aws_sd_configs:
+      - role: ecs
+        region: ${region}
+        clusters: ["${cluster_arn}"]
+        port: ${port}
+        refresh_interval: 30s
+    relabel_configs:
+      # 다른 서비스와 시작 전 태스크를 제외한다. 배포 중 구/신 버전은 모두 관찰한다.
+      - source_labels: [__meta_ecs_task_group]
+        regex: 'service:(${service_regex})'
+        action: keep
+      - source_labels: [__meta_ecs_last_status]
+        regex: RUNNING
+        action: keep
+      - target_label: env
+        replacement: ${env}
+      - source_labels: [__meta_ecs_task_group]
+        regex: 'service:meety-v2-${env}-(.+)'
+        target_label: service
+        replacement: '$1'
+      - source_labels: [__meta_ecs_task_arn]
+        regex: '.*/([^/]+)'
+        target_label: task_id
+        replacement: '$1'
+      - source_labels: [__meta_ecs_task_definition]
+        regex: '.*:([0-9]+)'
+        target_label: task_revision
+        replacement: '$1'

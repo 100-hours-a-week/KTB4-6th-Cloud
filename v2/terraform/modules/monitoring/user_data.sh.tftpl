@@ -20,21 +20,10 @@ fi
 install -d -m 755 /opt/meety/monitoring
 cd /opt/meety/monitoring
 
-cat > docker-compose.yml <<'MEETY_EOF'
-${compose}
-MEETY_EOF
-
-cat > prometheus.yml <<'MEETY_EOF'
-${prometheus_config}
-MEETY_EOF
-
-cat > loki.yml <<'MEETY_EOF'
-${loki_config}
-MEETY_EOF
-
-cat > grafana-datasources.yml <<'MEETY_EOF'
-${grafana_datasources}
-MEETY_EOF
+# 설정 파일은 Terraform이 렌더링한 내용을 그대로 쓴다 (sync-config.sh와 같은 내용)
+%{ for name, content in files ~}
+echo '${base64encode(content)}' | base64 -d > '${name}'
+%{ endfor ~}
 
 umask 077
 GRAFANA_ADMIN_PASSWORD=$(/snap/bin/aws ssm get-parameter --region '${region}' \

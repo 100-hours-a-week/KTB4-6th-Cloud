@@ -97,3 +97,18 @@ variable "volume_tags" {
   description = "provider 기본 태그가 자동 적용되지 않는 루트 볼륨용 태그"
   type        = map(string)
 }
+
+variable "ecs_cluster_arn" {
+  description = "ECS 조회 권한을 이 클러스터로 제한할 때 쓰는 ARN"
+  type        = string
+}
+
+variable "ecs_scrape_services" {
+  description = "Prometheus가 수집할 ECS 서비스 이름 목록 (예: meety-v2-staging-be-api)"
+  type        = list(string)
+}
+
+variable "ecs_scrape_port" {
+  description = "BE 태스크에서 /actuator/prometheus를 여는 포트"
+  type        = number
+}

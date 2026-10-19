@@ -1,5 +1,28 @@
 # 환경마다 독립된 모니터링 서버를 만든다 (Prometheus, Loki, Grafana).
 # staging과 prod를 나눠 서로의 부하와 장애가 영향을 주지 않게 한다.
+
+# 서버의 /opt/meety/monitoring에 둘 설정 파일. 첫 부팅(user_data)과 이후 반영(v2/monitoring/sync-config.sh)이
+# 같은 렌더링 결과(output config_files)를 쓰도록 여기서 한 번만 만든다
+locals {
+  config_files = {
+    "docker-compose.yml" = templatefile("${var.config_dir}/docker-compose.yml.tftpl", {
+      prometheus_image = var.prometheus_image
+      loki_image       = var.loki_image
+      grafana_image    = var.grafana_image
+      grafana_domain   = var.grafana_domain
+    })
+    "prometheus.yml" = templatefile("${var.config_dir}/prometheus.yml.tftpl", {
+      env           = var.env
+      region        = var.region
+      cluster_arn   = var.ecs_cluster_arn
+      service_regex = join("|", var.ecs_scrape_services)
+      port          = var.ecs_scrape_port
+    })
+    "loki.yml"                = file("${var.config_dir}/loki.yml")
+    "grafana-datasources.yml" = templatefile("${var.config_dir}/grafana-datasources.yml.tftpl", { region = var.region })
+  }
+}
+
 resource "aws_security_group" "monitoring" {
   name        = "${var.name_prefix}-monitoring-sg"
   description = "Grafana from ALB, Loki from environment log shippers"
@@ -113,6 +136,52 @@ resource "aws_iam_role_policy" "cloudwatch_read" {
   })
 }
 
+# 내장 ECS 탐색은 클러스터/서비스/태스크를 조회한다. 목록은 해당 환경으로 제한한다.
+resource "aws_iam_role_policy" "ecs_read" {
+  name = "read-ecs-tasks"
+  role = aws_iam_role.monitoring.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # SDK 초기 인증 검사에서 클러스터 미지정 DescribeClusters도 호출한다.
+        Sid      = "DescribeClusters"
+        Effect   = "Allow"
+        Action   = "ecs:DescribeClusters"
+        Resource = "*"
+      },
+      {
+        Sid      = "ListEnvironmentServicesAndTasks"
+        Effect   = "Allow"
+        Action   = ["ecs:ListServices", "ecs:ListTasks"]
+        Resource = "*"
+        Condition = {
+          ArnEquals = { "ecs:cluster" = var.ecs_cluster_arn }
+        }
+      },
+      {
+        Sid    = "DescribeEnvironmentServicesAndTasks"
+        Effect = "Allow"
+        Action = ["ecs:DescribeServices", "ecs:DescribeTasks"]
+        Resource = [
+          "${replace(var.ecs_cluster_arn, ":cluster/", ":service/")}/*",
+          "${replace(var.ecs_cluster_arn, ":cluster/", ":task/")}/*",
+        ]
+      },
+      {
+        # 내장 탐색은 ENI의 공인 IP도 조회하지만 실제 수집에는 사설 IP를 사용한다.
+        Sid      = "DescribeNetworkInterfaces"
+        Effect   = "Allow"
+        Action   = "ec2:DescribeNetworkInterfaces"
+        Resource = "*"
+        Condition = {
+          StringEquals = { "aws:RequestedRegion" = var.region }
+        }
+      },
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "monitoring" {
   name = "${var.name_prefix}-monitoring"
   role = aws_iam_role.monitoring.name
@@ -131,15 +200,7 @@ resource "aws_instance" "monitoring" {
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     region         = var.region
     parameter_name = split(":parameter", var.grafana_admin_password_parameter_arn)[1]
-    compose = templatefile("${var.config_dir}/docker-compose.yml.tftpl", {
-      prometheus_image = var.prometheus_image
-      loki_image       = var.loki_image
-      grafana_image    = var.grafana_image
-      grafana_domain   = var.grafana_domain
-    })
-    prometheus_config   = templatefile("${var.config_dir}/prometheus.yml.tftpl", { env = var.env })
-    loki_config         = file("${var.config_dir}/loki.yml")
-    grafana_datasources = templatefile("${var.config_dir}/grafana-datasources.yml.tftpl", { region = var.region })
+    files          = local.config_files
   })
 
   # 초기 용량은 실측 전이다. CPU 크레딧 소진으로 추가 요금이 발생하지 않게 한다.
@@ -167,7 +228,7 @@ resource "aws_instance" "monitoring" {
   }
 
   # 인스턴스 첫 부팅 전에 파라미터 조회와 SSM 권한이 준비되어야 한다.
-  depends_on = [aws_iam_role_policy.params, aws_iam_role_policy_attachment.ssm]
+  depends_on = [aws_iam_role_policy.params, aws_iam_role_policy_attachment.ssm, aws_iam_role_policy.ecs_read]
   tags       = { Name = "${var.name_prefix}-monitoring" }
 }
 

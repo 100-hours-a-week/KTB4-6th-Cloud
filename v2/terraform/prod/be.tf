@@ -64,7 +64,21 @@ resource "aws_ecs_task_definition" "be" {
       { name = "JAVA_TOOL_OPTIONS", value = "-Xmx1024m -Xms512m" },
       # V1 dev와 같이 DB에 연결되지 않아도 앱 기동은 성공하게 한다. 연결 상태는 헬스체크(/actuator/health)로 드러난다
       { name = "SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT", value = "-1" },
-      # 크레딧 비용, 회의 생성 하루 한도, 로그인 쿠키 이름은 BE prod profile 기본값을 쓴다 (staging은 시험용 값으로 덮어쓴다)
+      # V1 prod와 같이 DB 연결 없이 Hibernate 방언을 정해, 기동 때 DB 확인 연결을 생략한다
+      { name = "SPRING_JPA_DATABASE_PLATFORM", value = "org.hibernate.dialect.MySQLDialect" },
+      # V1 prod .env와 같은 팀당 하루 회의 생성 한도. 크레딧 비용, 로그인 쿠키 이름은 BE prod profile 기본값을 쓴다
+      { name = "MEETING_DAILY_CREATE_LIMIT", value = "20" },
+      # V1 prod와 같은 Sentry 오류·성능 수집 설정. DSN은 secrets로 넣는다
+      { name = "SENTRY_ENVIRONMENT", value = "production" },
+      { name = "BE_SENTRY_LOGS_ENABLED", value = "true" },
+      { name = "BE_SENTRY_TRACES_SAMPLE_RATE", value = "1.0" },
+      { name = "SENTRY_PROFILE_SESSION_SAMPLE_RATE", value = "1.0" },
+      { name = "SENTRY_PROFILE_LIFECYCLE", value = "TRACE" },
+      { name = "SENTRY_SEND_DEFAULT_PII", value = "true" },
+      # V1 prod와 같이 OpenTelemetry 내보내기는 끈다 (Sentry로만 수집)
+      { name = "OTEL_LOGS_EXPORTER", value = "none" },
+      { name = "OTEL_METRICS_EXPORTER", value = "none" },
+      { name = "OTEL_TRACES_EXPORTER", value = "none" },
     ]
 
     # 비밀값은 태스크가 시작할 때 ECS가 Parameter Store에서 읽어 넣는다 (실행 역할 권한).
@@ -79,6 +93,7 @@ resource "aws_ecs_task_definition" "be" {
       { name = "KAKAO_CLIENT_SECRET", valueFrom = "${local.param_arn_prefix}/be/KAKAO_CLIENT_SECRET" },
       { name = "KAKAO_ADMIN_KEY", valueFrom = "${local.param_arn_prefix}/be/KAKAO_ADMIN_KEY" },
       { name = "INTERNAL_API_KEY", valueFrom = "${local.param_arn_prefix}/be/INTERNAL_API_KEY" },
+      { name = "SENTRY_DSN", valueFrom = "${local.param_arn_prefix}/be/SENTRY_DSN" },
     ]
 
     logConfiguration = {

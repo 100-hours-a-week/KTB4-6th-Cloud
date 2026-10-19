@@ -40,7 +40,7 @@ resource "aws_ecs_task_definition" "be" {
       protocol      = "tcp"
     }]
 
-    # 비밀값이 아닌 설정. DB와 Redis 주소는 DB 인스턴스의 private IP를 참조한다
+    # 비밀값이 아닌 설정. DB와 Redis 주소는 각각의 접속 대상을 참조한다
     environment = [
       { name = "SPRING_PROFILES_ACTIVE", value = "staging" },
       # staging profile의 ddl-auto create는 기동할 때마다 테이블을 다시 만든다.
@@ -50,7 +50,7 @@ resource "aws_ecs_task_definition" "be" {
       { name = "TZ", value = "Asia/Seoul" },
       { name = "DB_HOST", value = aws_instance.db.private_ip },
       { name = "DB_PORT", value = "3306" },
-      { name = "REDIS_HOST", value = aws_instance.db.private_ip },
+      { name = "REDIS_HOST", value = local.be_redis_host },
       { name = "REDIS_PORT", value = "6379" },
       { name = "KAKAO_REDIRECT_URI", value = var.be_kakao_redirect_uri },
       { name = "CORS_ALLOWED_ORIGINS", value = join(",", var.fe_allowed_origins) },

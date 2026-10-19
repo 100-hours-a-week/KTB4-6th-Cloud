@@ -88,3 +88,18 @@ output "ai_analysis_instance_id" {
   value       = aws_instance.ai_analysis.id
 }
 
+
+output "redis_instance_id" {
+  description = "Redis 전용 인스턴스 ID. SSM 접속과 데이터 이전에 사용한다"
+  value       = module.redis.instance_id
+}
+
+output "redis_private_ip" {
+  description = "Redis 전용 사설 IP. 실제 BE 접속 전환 여부는 be_redis_host 출력으로 확인한다"
+  value       = module.redis.private_ip
+}
+
+output "be_redis_host" {
+  description = "CI/CD용 BE 태스크 템플릿에 반영할 Redis 주소. 실행 중인 태스크의 전환은 배포로 확인한다"
+  value       = local.be_redis_host
+}

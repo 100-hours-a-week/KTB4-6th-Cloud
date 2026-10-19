@@ -17,6 +17,9 @@ import uuid
 import zipfile
 
 
+SETTINGS = json.loads(pathlib.Path(__file__).with_name("settings.json").read_text())
+SOURCE_ID = SETTINGS["SOURCE_SERVER_ID"]
+TARGET_ID = SETTINGS["TARGET_SERVER_ID"]
 NAME = "migration-hostgroup-probe"
 CLIENTS = []
 
@@ -87,19 +90,23 @@ def main():
     user = env["SPRING_DATASOURCE_USERNAME"]
     password = env["SPRING_DATASOURCE_PASSWORD"]
     network = json.loads(run(["docker", "inspect", "dev-proxysql"]))[0]["HostConfig"]["NetworkMode"]
+    # 소스/대상 주소는 오하이오 리허설 고정값이며, 원본 서버 ID도 실제 쿼리로 확인한다.
+    if "10.1." in env.get("SPRING_DATASOURCE_URL", ""):
+        raise RuntimeError("오하이오 dev-app에서 실행해야 합니다")
+
     with tempfile.TemporaryDirectory(prefix="migration-probe-") as directory:
         path = pathlib.Path(directory)
         config = '''datadir="/var/lib/proxysql";
 admin_variables={admin_credentials="admin:admin";mysql_ifaces="127.0.0.1:6032";};
 mysql_variables={threads=2;interfaces="0.0.0.0:6033";monitor_enabled=false;connect_timeout_server_max=20000;enforce_autocommit_on_reads=true;};
 mysql_servers=(
-{hostgroup=10;address="10.0.1.147";port=3306;use_ssl=1;},
-{hostgroup=20;address="10.1.10.140";port=3306;use_ssl=1;status="OFFLINE_HARD";});
+{hostgroup=10;address="SOURCE_IP";port=3306;use_ssl=1;max_connections=SERVER_CAP;},
+{hostgroup=20;address="TARGET_IP";port=3306;use_ssl=1;max_connections=SERVER_CAP;status="OFFLINE_HARD";});
 mysql_users=({username=USER;password=PASSWORD;default_hostgroup=10;transaction_persistent=1;});
 mysql_query_rules=(
 {rule_id=0;active=1;username=USER;match_pattern="^SELECT 'end_";destination_hostgroup=10;apply=1;},
 {rule_id=1;active=1;username=USER;destination_hostgroup=10;apply=1;});
-'''.replace("USER", json.dumps(user)).replace("PASSWORD", json.dumps(password))
+'''.replace("SERVER_CAP", SETTINGS["PROXYSQL_MAX_CONNECTIONS"]).replace("SOURCE_IP", SETTINGS["SOURCE_DB_IP"]).replace("TARGET_IP", SETTINGS["TARGET_DB_IP"]).replace("USER", json.dumps(user)).replace("PASSWORD", json.dumps(password))
         (path / "proxysql.cnf").write_text(config)
         (path / "proxysql.cnf").chmod(0o600)
         # mysql 옵션 파일은 JSON 문자열이 아니라 MySQL 옵션 파일의 이스케이프 규칙을 사용한다.
@@ -125,31 +132,31 @@ mysql_query_rules=(
                     time.sleep(.2)
             else:
                 raise RuntimeError("probe startup failed")
-            # 완료 표식만 오하이오로 보내 COMMIT 이후의 표식 자체가 서울에서 대기하지 않게 한다.
+            # 완료 표식만 오하이오로 보내 COMMIT 이후의 표식 자체가 대상에서 대기하지 않게 한다.
             old = Session(user)
             reused = Session(user)
-            assert reused.sql("SELECT @@server_id") == ["1"]
-            assert old.sql("START TRANSACTION; SELECT @@server_id, id FROM meetings LIMIT 1")[0].startswith("1\t")
+            assert reused.sql("SELECT @@server_id") == [SOURCE_ID]
+            assert old.sql("START TRANSACTION; SELECT @@server_id, id FROM meetings LIMIT 1")[0].startswith(SOURCE_ID + "\t")
             report("ohio_transaction_started")
             admin("UPDATE mysql_query_rules SET destination_hostgroup=20 WHERE rule_id=1; LOAD MYSQL QUERY RULES TO RUNTIME")
-            report("new_requests_routed_to_parked_seoul")
+            report("new_requests_routed_to_parked_target")
             fresh = Session(user)
             with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
                 futures = {"fresh": pool.submit(fresh.sql, "SELECT @@server_id"),
                            "reused": pool.submit(reused.sql, "SELECT @@server_id")}
                 time.sleep(1)
                 assert all(not f.done() for f in futures.values()), "new query did not wait"
-                assert old.sql("SELECT @@server_id; COMMIT")[0] == "1"
+                assert old.sql("SELECT @@server_id; COMMIT")[0] == SOURCE_ID
                 report("old_transaction_committed_while_new_queries_wait")
                 futures["after_commit"] = pool.submit(old.sql, "SELECT @@server_id")
                 time.sleep(1)
                 assert all(not f.done() for f in futures.values()), "post-commit query did not wait"
                 # 실제 전환에서는 최종 복제 확인 후에만 이 단계를 실행한다.
                 admin("UPDATE mysql_servers SET status='ONLINE' WHERE hostgroup_id=20; LOAD MYSQL SERVERS TO RUNTIME")
-                report("seoul_execution_enabled")
+                report("target_execution_enabled")
                 for kind, future in futures.items():
                     result = future.result(timeout=23)
-                    assert result == ["3"], (kind, result)
+                    assert result == [TARGET_ID], (kind, result)
                     report("query_resumed", session=kind, result=result)
             report("PASS", scope="mysql client routing and connection-wait; no replication cutover")
             for client in CLIENTS:
@@ -162,12 +169,12 @@ mysql_query_rules=(
                 pending = pool.submit(rollback_client.sql, "SELECT @@server_id")
                 time.sleep(1)
                 assert not pending.done(), "rollback query did not wait"
-                admin("INSERT INTO mysql_servers(hostgroup_id,hostname,port,use_ssl,status) VALUES(20,'10.0.1.147',3306,1,'ONLINE'); LOAD MYSQL SERVERS TO RUNTIME; UPDATE mysql_query_rules SET destination_hostgroup=10 WHERE rule_id=1; LOAD MYSQL QUERY RULES TO RUNTIME")
-                assert pending.result(timeout=23) == ["1"]
+                admin("INSERT INTO mysql_servers(hostgroup_id,hostname,port,use_ssl,status,max_connections) VALUES(20,'SOURCE_IP',3306,1,'ONLINE',SERVER_CAP); LOAD MYSQL SERVERS TO RUNTIME; UPDATE mysql_query_rules SET destination_hostgroup=10 WHERE rule_id=1; LOAD MYSQL QUERY RULES TO RUNTIME".replace("SOURCE_IP", SETTINGS["SOURCE_DB_IP"]).replace("SERVER_CAP", SETTINGS["PROXYSQL_MAX_CONNECTIONS"]))
+                assert pending.result(timeout=23) == [SOURCE_ID]
                 report("ROLLBACK_PASS", scope="already queued HG20 request resumed on Ohio alias")
             rollback_client.close()
             CLIENTS.clear()
-            admin("DELETE FROM mysql_servers WHERE hostgroup_id=20 AND hostname='10.0.1.147'; LOAD MYSQL SERVERS TO RUNTIME")
+            admin("DELETE FROM mysql_servers WHERE hostgroup_id=20 AND hostname='SOURCE_IP'; LOAD MYSQL SERVERS TO RUNTIME".replace("SOURCE_IP", SETTINGS["SOURCE_DB_IP"]).replace("SERVER_CAP", SETTINGS["PROXYSQL_MAX_CONNECTIONS"]))
             if args.jdbc_class:
                 for client in CLIENTS:
                     client.close()
@@ -183,7 +190,7 @@ mysql_query_rules=(
                 url = env["SPRING_DATASOURCE_URL"]
                 import re
                 url = re.sub(r"^jdbc:mysql://[^/]+/", "jdbc:mysql://" + NAME + ":6033/", url)
-                (path / "jdbc.env").write_text("PROBE_JDBC_URL=" + url + "\nSPRING_DATASOURCE_USERNAME=" + user + "\nSPRING_DATASOURCE_PASSWORD=" + password + "\n")
+                (path / "jdbc.env").write_text("PROBE_SOURCE_SERVER_ID=" + SOURCE_ID + "\nPROBE_TARGET_SERVER_ID=" + TARGET_ID + "\nPROBE_JDBC_URL=" + url + "\nSPRING_DATASOURCE_USERNAME=" + user + "\nSPRING_DATASOURCE_PASSWORD=" + password + "\n")
                 (path / "jdbc.env").chmod(0o600)
                 java_name = "migration-jdbc-probe-" + uuid.uuid4().hex[:8]
                 java = subprocess.Popen(["docker", "run", "--rm", "-i", "--name", java_name, "--network", network, "--user", "0",

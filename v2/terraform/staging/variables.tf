@@ -10,24 +10,6 @@ variable "v1_vpc_cidr" {
   default     = "10.0.0.0/16"
 }
 
-variable "v1_dev_app_private_ip" {
-  description = "V1 dev-app 인스턴스(ProxySQL 실행)의 사설 IP. DB 이전 리허설 때 리허설용 DB 접속을 허용한다"
-  type        = string
-  default     = "10.0.1.97"
-}
-
-variable "migration_db_private_ip" {
-  description = "DB 이전 리허설용 MySQL 인스턴스의 사설 IP (private 서브넷 2a). 오하이오 dev DB 보안 그룹과 ProxySQL 설정이 이 주소를 쓴다"
-  type        = string
-  default     = "10.1.10.140"
-}
-
-variable "migration_db_server_id" {
-  description = "리허설용 MySQL의 server_id. 복제하는 서버끼리 겹치면 안 된다 (V1 dev 1, staging DB 2)"
-  type        = number
-  default     = 3
-}
-
 variable "env" {
   description = "환경 이름. prod 폴더에서는 prod로 바꾼다"
   type        = string

@@ -17,6 +17,9 @@
 **/.DS_Store
 **/__pycache__/
 
+# 공식 해시로 검증해 내려받는 Lambda 배포 바이너리는 Git에 넣지 않는다.
+v2/monitoring/.artifacts/
+
 # load-test: 실제 계정과 토큰을 담은 로컬 fixture 및 오디오 샘플은 저장소에 올리지 않는다.
 v1/load-test/fixtures.credentials.local.json
 v1/load-test/fixtures.teams.credentials.local.json

@@ -1,0 +1,8 @@
+{
+  "version": "v1.0.1",
+  "filename": "lambda-promtail-v1.0.1.zip",
+  "url": "https://github.com/grafana/lambda-promtail/releases/download/v1.0.1/lambda-promtail-v1.0.1.zip",
+  "sha256": "2a436a30772ac638f715dd240784f787b9f0c745ba292a49cd23d132c477fd13",
+  "runtime": "provided.al2023",
+  "architecture": "x86_64"
+}

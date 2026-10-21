@@ -164,7 +164,7 @@ resource "aws_cloudwatch_log_subscription_filter" "loki_forwarder" {
   depends_on = [aws_lambda_permission.loki_forwarder, aws_lambda_function_event_invoke_config.loki_forwarder]
 }
 
-# 로그 전달 함수의 오류와 비동기 이벤트 폐기를 감시한다.
+# ALARM과 OK 전환을 전용 Lambda로 전달한다. OK는 누락분 복구 완료를 의미하지 않는다.
 resource "aws_cloudwatch_metric_alarm" "loki_forwarder" {
   for_each = toset(["Errors", "AsyncEventsDropped"])
 
@@ -179,6 +179,11 @@ resource "aws_cloudwatch_metric_alarm" "loki_forwarder" {
   comparison_operator = "GreaterThanOrEqualToThreshold"
   threshold           = 1
   treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_lambda_function.discord_notifier.arn]
+  ok_actions          = [aws_lambda_function.discord_notifier.arn]
+
+  # 호출 권한과 재시도 설정이 준비된 뒤 Alarm의 전달 대상을 연결한다.
+  depends_on = [aws_lambda_permission.discord_notifier, aws_lambda_function_event_invoke_config.discord_notifier]
 }
 
 output "loki_log_shipping" {

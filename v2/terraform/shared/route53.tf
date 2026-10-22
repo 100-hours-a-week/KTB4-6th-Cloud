@@ -93,10 +93,19 @@ resource "aws_route53_record" "cert_validation_monitoring" {
   records = [one([for o in aws_acm_certificate.monitoring.domain_validation_options : o.resource_record_value if o.domain_name == each.key])]
 }
 
-# staging Grafana. prod Grafana(grafana.meety.io.kr)는 prod 모니터링 서버를 만들 때 추가한다
+# 환경별 Grafana만 추가한다. 기존 서비스 DNS 레코드는 변경하지 않는다.
 resource "aws_route53_record" "grafana_staging" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "grafana-staging.${aws_route53_zone.main.name}"
+  type    = "CNAME"
+  ttl     = 600
+  records = [aws_lb.main.dns_name]
+}
+
+# 인증서는 기존 monitoring 인증서에 포함되어 있다. prod 모니터링 전용 Host 이름이다.
+resource "aws_route53_record" "grafana_prod" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "grafana.${aws_route53_zone.main.name}"
   type    = "CNAME"
   ttl     = 600
   records = [aws_lb.main.dns_name]

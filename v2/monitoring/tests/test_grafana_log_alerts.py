@@ -30,6 +30,27 @@ class LogAlertsTest(unittest.TestCase):
         self.assertTrue(ALERTS.QUERY.endswith('or vector(0)'))
         self.assertEqual(rule['data'][1]['model']['expression'], '$A >= 10')
 
+    def test_prod_rule_and_endpoints_are_isolated_from_staging(self):
+        # prod 선택이 SSM·접속 URL·로그 그룹·알림 수신처에 모두 적용되어야 한다.
+        config = ALERTS.environment('prod')
+        rule = ALERTS.rule('prod')
+        self.assertEqual(config['base_url'], 'https://grafana.meety.io.kr')
+        self.assertEqual(config['prefix'], '/meety/prod/monitoring/')
+        self.assertEqual(rule['labels']['env'], 'prod')
+        self.assertEqual(rule['notification_settings']['receiver'], 'meety-prod-discord-logs')
+        self.assertIn('/ecs/meety-v2-prod/be', rule['data'][0]['model']['expr'])
+        self.assertNotIn('staging', str(rule))
+        self.assertEqual(ALERTS.rule()['labels']['env'], 'staging')
+
+    def test_connection_environment_mismatch_aborts_before_requests(self):
+        # 인증 정보를 읽지 않고 객체만 만들어 환경 불일치가 API 호출 전에 차단되는지 검사한다.
+        grafana = object.__new__(ALERTS.Grafana)
+        grafana.env = 'staging'
+        grafana.api = Mock()
+        with self.assertRaises(ALERTS.SyncError):
+            ALERTS.sync(grafana, execute=True, env='prod')
+        grafana.api.assert_not_called()
+
     def test_unowned_rule_uid_collision_aborts_without_writes(self):
         grafana = Mock()
         grafana.api.side_effect = [[], {'labels': {}}]

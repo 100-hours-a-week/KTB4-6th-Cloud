@@ -84,7 +84,7 @@ class ReplayTest(unittest.TestCase):
         self.assertEqual(json.loads(output.getvalue())['events'], 1)
         self.assertNotIn(self.event['message'], output.getvalue())
 
-    def test_rejects_non_staging_before_reading_logs(self):
+    def test_rejects_environment_mismatch_before_reading_logs(self):
         self.config['env'] = 'prod'
         with patch.object(sys, 'argv', self.argv), \
              patch.object(REPLAY.subprocess, 'check_output', return_value=json.dumps(self.config)), \
@@ -92,6 +92,18 @@ class ReplayTest(unittest.TestCase):
              contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             REPLAY.main()
         calls.assert_not_called()
+
+    def test_prod_requires_explicit_environment_and_uses_prod_outputs(self):
+        # 기본 staging을 유지하되 prod를 명시하면 prod output만 읽어 dry-run 한다.
+        self.config['env'] = 'prod'
+        with patch.object(sys, 'argv', self.argv + ['--env', 'prod']), \
+             patch.object(REPLAY.subprocess, 'check_output', return_value=json.dumps(self.config)) as output_call, \
+             patch.object(REPLAY.subprocess, 'run', return_value=SimpleNamespace(stdout=json.dumps({'events': []}))) as calls, \
+             contextlib.redirect_stdout(io.StringIO()):
+            REPLAY.main()
+        self.assertTrue(output_call.call_args.args[0][1].endswith('/terraform/prod'))
+        self.assertEqual(calls.call_count, 1)
+        self.assertIn('filter-log-events', calls.call_args.args[0])
 
     def test_lambda_function_error_stops_replay(self):
         responses = [{'events': [self.event]}, {'Account': '123'},

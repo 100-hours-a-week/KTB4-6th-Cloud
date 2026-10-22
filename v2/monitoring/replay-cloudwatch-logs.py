@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""staging CloudWatch 로그 구간을 조회하고, 명시적으로 실행할 때만 Loki 전달 Lambda로 재전송한다."""
+"""선택한 환경의 CloudWatch 로그를 조회하고 --execute에서만 전달 Lambda로 재전송한다."""
 import argparse
 import base64
 from collections import defaultdict
@@ -48,6 +48,7 @@ def batches(events, max_bytes=200_000):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--env', choices=('staging', 'prod'), default='staging', help='대상 환경 (기본 staging)')
     parser.add_argument('--profile', default='meety-admin')
     parser.add_argument('--log-group', required=True)
     parser.add_argument('--start', required=True, help='포함 시작 시각, 예: 2026-10-20T09:00:00+09:00')
@@ -58,12 +59,12 @@ def main():
     start, end = timestamp_ms(args.start), timestamp_ms(args.end)
     if not 0 < end - start <= 3_600_000:
         parser.error('시작·종료 구간은 0초 초과, 1시간 이하여야 합니다')
-    tf_dir = Path(__file__).resolve().parent.parent / 'terraform' / 'staging'
+    tf_dir = Path(__file__).resolve().parent.parent / 'terraform' / args.env
     config = json.loads(subprocess.check_output(
         ['terraform', '-chdir=' + str(tf_dir), 'output', '-json', 'loki_log_shipping'], text=True))
-    # 환경이나 대상을 임의로 바꿔 prod에 재전송하는 실수를 막는다.
-    if config['env'] != 'staging' or args.log_group not in config['allowed_log_groups']:
-        parser.error('staging Terraform output에 등록된 로그 그룹만 사용할 수 있습니다')
+    # prod는 --env prod를 명시해야 한다. 출력 환경과 허용 그룹이 다르면 전송하지 않는다.
+    if config['env'] != args.env or args.log_group not in config['allowed_log_groups']:
+        parser.error('선택한 환경의 Terraform output에 등록된 로그 그룹만 사용할 수 있습니다')
 
     def aws(*command):
         result = subprocess.run(['aws', '--profile', args.profile, '--region', config['region'],

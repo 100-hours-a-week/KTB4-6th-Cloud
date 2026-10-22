@@ -93,3 +93,8 @@ output "be_redis_host" {
   description = "CI/CD용 BE 태스크 템플릿에 반영할 Redis 주소. 실행 중인 태스크의 전환은 배포로 확인한다"
   value       = local.be_redis_host
 }
+
+output "monitoring_config_files" {
+  description = "모니터링 서버 설정 파일. v2/monitoring/sync-config.sh가 읽어 서버에 반영한다"
+  value       = module.monitoring.config_files
+}

@@ -46,6 +46,12 @@ variable "prod_domains" {
   default     = ["api.meety.io.kr", "meety.io.kr"]
 }
 
+variable "monitoring_domains" {
+  description = "Grafana 인증서에 넣을 도메인 (staging, prod). prod Grafana를 만들 때 인증서를 다시 발급하지 않도록 함께 넣는다"
+  type        = list(string)
+  default     = ["grafana-staging.meety.io.kr", "grafana.meety.io.kr"]
+}
+
 variable "dev_domains" {
   description = "V1 dev 이전 리허설 인증서에 넣을 도메인. 첫 번째가 대표 이름이다 (BE, FE 순서)"
   type        = list(string)

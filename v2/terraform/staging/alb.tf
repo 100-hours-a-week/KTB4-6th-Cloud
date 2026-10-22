@@ -112,6 +112,67 @@ resource "aws_lb_listener_rule" "be_realtime" {
   }
 }
 
+# BE actuator는 8080에서 서비스 API와 함께 열린다 (Prometheus 수집용 /actuator/prometheus 포함).
+# 외부에는 CI 배포 확인용 health만 허용하고 나머지 actuator 경로는 막는다.
+# ALB 대상 그룹 health check와 Prometheus 수집은 태스크로 직접 가므로 이 규칙의 영향을 받지 않는다.
+# 실시간 경로 규칙(100)에는 /actuator가 없으므로 be-api 규칙(105)보다 앞에만 두면 된다
+resource "aws_lb_listener_rule" "be_actuator_health" {
+  listener_arn = local.shared.https_listener_arn
+  priority     = 101
+
+  condition {
+    host_header {
+      values = concat([var.be_domain], var.be_extra_domains)
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/actuator/health", "/actuator/health/*"]
+    }
+  }
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.be_api.arn
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-be-actuator-health-rule"
+  }
+}
+
+resource "aws_lb_listener_rule" "be_actuator_block" {
+  listener_arn = local.shared.https_listener_arn
+  priority     = 102
+
+  condition {
+    host_header {
+      values = concat([var.be_domain], var.be_extra_domains)
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/actuator", "/actuator/*"]
+    }
+  }
+
+  action {
+    type = "fixed-response"
+
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Forbidden"
+      status_code  = "403"
+    }
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-be-actuator-block-rule"
+  }
+}
+
 # be-api 대상 그룹
 resource "aws_lb_target_group" "be_api" {
   name        = "${local.name_prefix}-be-api-tg"

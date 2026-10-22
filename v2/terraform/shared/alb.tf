@@ -31,6 +31,17 @@ resource "aws_lb_listener_certificate" "prod" {
   certificate_arn = aws_acm_certificate_validation.prod.certificate_arn
 }
 
+# Grafana 인증서. prod 인증서와 같이 Route 53 검증 레코드가 생긴 뒤 발급이 끝날 때까지 기다린다
+resource "aws_acm_certificate_validation" "monitoring" {
+  certificate_arn         = aws_acm_certificate.monitoring.arn
+  validation_record_fqdns = [for d in var.monitoring_domains : aws_route53_record.cert_validation_monitoring[d].fqdn]
+}
+
+resource "aws_lb_listener_certificate" "monitoring" {
+  listener_arn    = aws_lb_listener.https.arn
+  certificate_arn = aws_acm_certificate_validation.monitoring.certificate_arn
+}
+
 resource "aws_lb" "main" {
   name               = "${local.name_prefix}-alb"
   load_balancer_type = "application"

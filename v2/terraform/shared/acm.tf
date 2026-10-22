@@ -50,3 +50,20 @@ resource "aws_acm_certificate" "dev" {
     Name = "${local.name_prefix}-dev-cert"
   }
 }
+
+# Grafana(모니터링)용 HTTPS 인증서 (ACM, DNS 검증, 2026-10-19)
+# - staging, prod 인증서에 도메인을 추가하면 서비스 도메인 인증서가 새로 발급되므로 별도 인증서로 만든다.
+# - 검증용 CNAME은 route53.tf에서 관리한다.
+resource "aws_acm_certificate" "monitoring" {
+  domain_name               = var.monitoring_domains[0]
+  subject_alternative_names = slice(var.monitoring_domains, 1, length(var.monitoring_domains))
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-monitoring-cert"
+  }
+}

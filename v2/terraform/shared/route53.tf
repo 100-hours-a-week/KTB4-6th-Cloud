@@ -82,6 +82,35 @@ resource "aws_route53_record" "cert_validation_prod" {
   records = [one([for o in aws_acm_certificate.prod.domain_validation_options : o.resource_record_value if o.domain_name == each.key])]
 }
 
+# Grafana 인증서 검증 레코드 (2026-10-19). prod 인증서와 같은 이유로 따로 두고, 목록은 도메인 변수로 정한다
+resource "aws_route53_record" "cert_validation_monitoring" {
+  for_each = toset(var.monitoring_domains)
+
+  zone_id = aws_route53_zone.main.zone_id
+  name    = one([for o in aws_acm_certificate.monitoring.domain_validation_options : o.resource_record_name if o.domain_name == each.key])
+  type    = one([for o in aws_acm_certificate.monitoring.domain_validation_options : o.resource_record_type if o.domain_name == each.key])
+  ttl     = 600
+  records = [one([for o in aws_acm_certificate.monitoring.domain_validation_options : o.resource_record_value if o.domain_name == each.key])]
+}
+
+# 환경별 Grafana만 추가한다. 기존 서비스 DNS 레코드는 변경하지 않는다.
+resource "aws_route53_record" "grafana_staging" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "grafana-staging.${aws_route53_zone.main.name}"
+  type    = "CNAME"
+  ttl     = 600
+  records = [aws_lb.main.dns_name]
+}
+
+# 인증서는 기존 monitoring 인증서에 포함되어 있다. prod 모니터링 전용 Host 이름이다.
+resource "aws_route53_record" "grafana_prod" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "grafana.${aws_route53_zone.main.name}"
+  type    = "CNAME"
+  ttl     = 600
+  records = [aws_lb.main.dns_name]
+}
+
 # dev 레코드를 서울 ALB CNAME(alb)에서 오하이오 A 레코드(v1_dev)로 옮긴다.
 # 같은 이름에 CNAME과 A를 동시에 둘 수 없어, 새 리소스로 만들지 않고 기존 레코드를 수정하게 한다 (타입, 값, TTL을 한 번에 변경)
 moved {

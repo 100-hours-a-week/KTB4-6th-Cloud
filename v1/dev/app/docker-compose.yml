@@ -23,6 +23,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx/logs:/var/log/nginx
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro  # worker 연결·FD 한도
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/acme-challenge:/var/www/certbot:ro # Certbot webroot 검증 파일 제공
       - /etc/letsencrypt:/etc/letsencrypt:ro         # 인증서와 심볼릭 링크 대상
@@ -127,6 +128,10 @@ services:
       OTEL_TRACES_EXPORTER: "none"
       # 토큰
       AUTH_ACCESS_TOKEN_COOKIE_NAME: "dev_accessToken"
+      # 부하 테스트 지표: 관리 포트(외부 미개방)로 prometheus 노출, Tomcat 스레드 지표 포함
+      MANAGEMENT_SERVER_PORT: "8081"
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus"
+      SERVER_TOMCAT_MBEANREGISTRY_ENABLED: "true"
     healthcheck:
       test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8080' || exit 1"]
       interval: 15s      # 15초마다 체크

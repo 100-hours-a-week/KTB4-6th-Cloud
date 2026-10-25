@@ -48,3 +48,7 @@ v1/migration/reset-*.out
 v1/migration/switch-*.out
 v1/migration/verify-*.out
 v1/migration/k6-*.html
+
+# staging 자동 on/off
+v2/scripts
+v2/terraform/staging/power_schedule.tf

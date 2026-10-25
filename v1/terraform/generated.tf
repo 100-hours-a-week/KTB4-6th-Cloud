@@ -490,6 +490,11 @@ resource "aws_iam_role_policy_attachment" "ec2_prod_params_editor" {
 }
 
 resource "aws_instance" "dev_ai" {
+  lifecycle {
+    # 중지 후 자동 할당 공인 IP가 사라져도 기존 서버를 재생성하지 않는다.
+    ignore_changes = [associate_public_ip_address]
+  }
+
   ami                                  = "ami-0e5497a77ef21b5ac"
   associate_public_ip_address          = true
   availability_zone                    = "us-east-2a"
@@ -702,78 +707,6 @@ resource "aws_vpc_security_group_egress_rule" "app_all" {
   security_group_id = "sg-09ac11928cda5a281"
 }
 
-resource "aws_instance" "prod_data" {
-  ami                                  = "ami-0e5497a77ef21b5ac"
-  associate_public_ip_address          = true
-  availability_zone                    = "us-east-2a"
-  disable_api_stop                     = false
-  disable_api_termination              = false
-  ebs_optimized                        = true
-  force_destroy                        = false
-  get_password_data                    = false
-  hibernation                          = false
-  instance_initiated_shutdown_behavior = "stop"
-  instance_type                        = "t3.micro"
-  ipv6_address_count                   = 0
-  key_name                             = "meety-v1"
-  monitoring                           = false
-  placement_partition_number           = 0
-  private_ip                           = "10.0.1.143"
-  region                               = "us-east-2"
-  secondary_private_ips                = []
-  security_groups                      = []
-  source_dest_check                    = true
-  subnet_id                            = "subnet-0eb391e5688b1e282"
-  tags = {
-    Name    = "data-v1-meety"
-    Service = "meety"
-  }
-  tags_all = {
-    Name    = "data-v1-meety"
-    Service = "meety"
-  }
-  tenancy                = "default"
-  vpc_security_group_ids = ["sg-016d5ef2c40006305", "sg-0769decbce98ab96b", aws_security_group.prod_data_migration.id]
-  capacity_reservation_specification {
-    capacity_reservation_preference = "open"
-  }
-  cpu_options {
-    core_count       = 1
-    threads_per_core = 2
-  }
-  credit_specification {
-    cpu_credits = "unlimited"
-  }
-  enclave_options {
-    enabled = false
-  }
-  maintenance_options {
-    auto_recovery = "default"
-  }
-  metadata_options {
-    http_endpoint               = "enabled"
-    http_protocol_ipv6          = "disabled"
-    http_put_response_hop_limit = 2
-    http_tokens                 = "required"
-    instance_metadata_tags      = "disabled"
-  }
-  private_dns_name_options {
-    enable_resource_name_dns_a_record    = false
-    enable_resource_name_dns_aaaa_record = false
-    hostname_type                        = "ip-name"
-  }
-  root_block_device {
-    delete_on_termination = true
-    encrypted             = false
-    iops                  = 3000
-    tags                  = {}
-    tags_all              = {}
-    throughput            = 125
-    volume_size           = 30
-    volume_type           = "gp3"
-  }
-}
-
 resource "aws_cloudwatch_log_group" "prod_app_nginx_error" {
   deletion_protection_enabled = false
   log_group_class             = "STANDARD"
@@ -905,6 +838,11 @@ resource "aws_s3_bucket_policy" "dev" {
 }
 
 resource "aws_instance" "dev_data" {
+  lifecycle {
+    # 중지 후 자동 할당 공인 IP가 사라져도 기존 DB와 볼륨을 보존한다.
+    ignore_changes = [associate_public_ip_address]
+  }
+
   ami                                  = "ami-0e5497a77ef21b5ac"
   associate_public_ip_address          = true
   availability_zone                    = "us-east-2a"
@@ -1057,6 +995,11 @@ resource "aws_iam_role" "ec2_prod" {
 }
 
 resource "aws_instance" "dev_app" {
+  lifecycle {
+    # 중지 후 자동 할당 공인 IP가 사라져도 기존 서버를 재생성하지 않는다.
+    ignore_changes = [associate_public_ip_address]
+  }
+
   ami                                  = "ami-0e5497a77ef21b5ac"
   associate_public_ip_address          = true
   availability_zone                    = "us-east-2a"

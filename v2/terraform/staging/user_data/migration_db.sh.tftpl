@@ -1,0 +1,72 @@
+#!/bin/bash
+# 오하이오 dev DB 이전 리허설용 서울 임시 MySQL 서버를 구성한다.
+# 앱·복제 계정은 v1/migration/reset.py에서 복사하거나 생성한다.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y docker.io docker-compose-v2
+snap install aws-cli --classic
+systemctl enable --now docker
+
+# 부팅 시 비밀번호를 조회하며 Terraform state나 user data에 원문을 넣지 않는다.
+export MYSQL_ROOT_PASSWORD="$(/snap/bin/aws ssm get-parameter \
+  --region '${region}' --name '${param_path}/DB_ROOT_PASSWORD' \
+  --with-decryption --query Parameter.Value --output text)"
+[ -n "$MYSQL_ROOT_PASSWORD" ] || { echo 'MySQL root password is empty'; exit 1; }
+
+install -d -m 700 /opt/meety
+python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+# Compose의 따옴표 문법으로 비밀번호의 특수 문자를 보존한다.
+Path('/opt/meety/.env').write_text(
+    'MYSQL_ROOT_PASSWORD=' + json.dumps(os.environ['MYSQL_ROOT_PASSWORD']) + '\n'
+)
+PY
+unset MYSQL_ROOT_PASSWORD
+chmod 600 /opt/meety/.env
+
+cat > /opt/meety/docker-compose.yml <<'COMPOSE'
+services:
+  mysql:
+    container_name: mysql
+    image: ${mysql_image}
+    restart: unless-stopped
+    ports:
+      - "${private_ip}:3306:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --server-id=${server_id}
+      - --max-connections=64
+      - --skip-replica-start=ON
+      - --relay-log-recovery=ON
+    environment:
+      MYSQL_ROOT_PASSWORD: "$${MYSQL_ROOT_PASSWORD}"
+      MYSQL_ROOT_HOST: localhost
+      TZ: Asia/Seoul
+      LANG: C.UTF-8
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h localhost -uroot --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  db_data:
+COMPOSE
+
+cd /opt/meety
+docker compose up -d --wait --wait-timeout 180
+docker exec mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "CREATE DATABASE dev_meetyDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; SET PERSIST read_only=ON; SET PERSIST super_read_only=ON;"'

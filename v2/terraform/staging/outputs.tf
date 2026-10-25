@@ -89,6 +89,16 @@ output "redis_private_ip" {
   value       = module.redis.private_ip
 }
 
+output "migration_db_instance_id" {
+  description = "서울 DB 이전 리허설 대상 EC2 인스턴스 ID"
+  value       = try(aws_instance.migration_db[0].id, null)
+}
+
+output "migration_db_private_ip" {
+  description = "서울 DB 이전 리허설 대상 MySQL 사설 IP"
+  value       = try(aws_instance.migration_db[0].private_ip, null)
+}
+
 output "be_redis_host" {
   description = "CI/CD용 BE 태스크 템플릿에 반영할 Redis 주소. 실행 중인 태스크의 전환은 배포로 확인한다"
   value       = local.be_redis_host

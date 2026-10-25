@@ -120,6 +120,9 @@ services:
       SENTRY_SEND_DEFAULT_PII: "true"
 
       SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "-1"   # DB 다운 상태에서도 앱 기동은 성공하도록
+      # 서울 DB 전환 뒤 요청당 DB 왕복(약 166ms × 7회)으로 연결 10개가 고갈돼 30개로 늘린다.
+      # ProxySQL 서버당 상한(settings.json PROXYSQL_MAX_CONNECTIONS 40)과 MySQL max_connections 64 안에 둔다
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "30"
       SPRING_JPA_DATABASE_PLATFORM: "org.hibernate.dialect.MySQLDialect"  # 부팅시 DB 프로브 커넥션 생략
       BE_SENTRY_TRACES_SAMPLE_RATE: "1.0"
       OTEL_LOGS_EXPORTER: "none"

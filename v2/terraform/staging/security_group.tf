@@ -128,6 +128,39 @@ resource "aws_vpc_security_group_egress_rule" "db_all" {
   ip_protocol       = "-1"
 }
 
+# 리허설 중에만 오하이오 dev ProxySQL의 고정 사설 IP에서 MySQL 접근을 허용한다.
+resource "aws_security_group" "migration_db" {
+  count = var.migration_rehearsal_enabled ? 1 : 0
+
+  name        = "${local.name_prefix}-migration-db-sg"
+  description = "Isolated V1 dev database migration rehearsal target"
+  vpc_id      = local.shared.vpc_id
+
+  tags = {
+    Name = "${local.name_prefix}-migration-db-sg"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "migration_db_mysql_from_dev_proxysql" {
+  count = var.migration_rehearsal_enabled ? 1 : 0
+
+  security_group_id = aws_security_group.migration_db[0].id
+  description       = "MySQL from Ohio V1 dev ProxySQL over VPC peering"
+  cidr_ipv4         = "10.0.1.97/32"
+  ip_protocol       = "tcp"
+  from_port         = 3306
+  to_port           = 3306
+}
+
+resource "aws_vpc_security_group_egress_rule" "migration_db_all" {
+  count = var.migration_rehearsal_enabled ? 1 : 0
+
+  security_group_id = aws_security_group.migration_db[0].id
+  description       = "Outbound for SSM, package installation, and source replication"
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
+}
+
 # staging AI 보안 그룹: 실시간 STT(ai-live) 인스턴스에 붙인다. 분석(ai-analysis)은 ai_analysis 보안 그룹을 쓴다.
 # BE만 AI를 호출하므로 BE 보안 그룹에서 오는 요청만 받는다. SSH는 열지 않고 SSM으로 접속한다.
 resource "aws_security_group" "ai" {

@@ -18,7 +18,7 @@ const RATE = positiveInt('RATE', 2);
 const DURATION = __ENV.DURATION || '20m';
 // REST 집중 실험은 회의마다 목록·상세 조회를 추가한다. 기존 쓰기 실험 기본값은 유지한다.
 const INCLUDE_READS = __ENV.INCLUDE_READS === 'YES';
-// 팀별 하루 회의 생성 제한(dev 100, 삭제한 회의도 포함)보다 여유를 두고 팀을 넘긴다.
+// 팀별 하루 회의 생성 제한(dev 100, 삭제한 회의도 포함)보다 여유를 두고 팀 수를 정한다.
 const PER_TEAM = positiveInt('PER_TEAM', 90);
 const PASSWORD = __ENV.MIG_PASSWORD || `Mig!${RUN_ID}${Math.random().toString(36).slice(2, 10)}`;
 // BE가 인증 토큰을 읽는 쿠키 이름. 환경마다 다르다 (dev는 dev_accessToken, BE 기본값은 accessToken)
@@ -75,7 +75,8 @@ const refreshedTokens = {};
 
 export default function (data) {
   const seq = exec.scenario.iterationInTest;
-  const account = data.accounts[Math.min(Math.floor(seq / PER_TEAM), data.accounts.length - 1)];
+  // 요청마다 팀을 순환해 한 팀에 요청이 연속 집중되지 않도록 한다.
+  const account = data.accounts[seq % data.accounts.length];
   const tag = `mig-${RUN_ID}-${String(seq).padStart(6, '0')}`;
   // 세 가지 최종 상태(생성만, 수정까지, 삭제까지)를 고르게 만든다.
   const lastStep = ['create', 'patch', 'delete'][seq % 3];
@@ -84,6 +85,7 @@ export default function (data) {
     title: `M${String(seq).padStart(6, '0')}`,
     purpose: tag,
     note: `c-${seq}`,
+    scheduledAt: currentKstLocalDateTime(),
     targetDurationMinutes: 30,
     attendeeTeamMemberIds: [account.teamMemberId],
     customAttendeeNames: [],
@@ -216,6 +218,11 @@ function positiveInt(name, fallback) {
   if (text === undefined) return fallback;
   if (!/^[1-9]\d*$/.test(text)) throw new Error(`${name}는 1 이상의 정수여야 합니다`);
   return Number(text);
+}
+
+function currentKstLocalDateTime() {
+  // 사전 준비 요청 없이 바로 시작하도록 시간대 없는 KST 예정 시각을 1분 전으로 보낸다.
+  return new Date(Date.now() + 9 * 60 * 60 * 1000 - 60 * 1000).toISOString().slice(0, 19);
 }
 
 function durationSeconds(text) {

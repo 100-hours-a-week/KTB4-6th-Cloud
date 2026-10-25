@@ -104,11 +104,6 @@ import {
 
 # ---------- ec2 ----------
 import {
-  to = aws_instance.prod_data
-  id = "i-0ebad3417d7a43bda"
-}
-
-import {
   to = aws_instance.dev_app
   id = "i-076b39ef84ef3ddf9"
 }

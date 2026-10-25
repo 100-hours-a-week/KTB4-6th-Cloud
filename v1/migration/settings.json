@@ -1,4 +1,5 @@
 {
+  "REHEARSAL_ENABLED": "false",
   "ACCOUNT_ID": "062270568040",
   "SOURCE_REGION": "us-east-2",
   "SOURCE_APP": "i-076b39ef84ef3ddf9",
@@ -6,14 +7,14 @@
   "SOURCE_DB_IP": "10.0.1.147",
   "SOURCE_CONTAINER": "dev-db",
   "SOURCE_SERVER_ID": "1",
-  "TARGET_REGION": "us-east-2",
-  "TARGET_DB": "i-0ebad3417d7a43bda",
-  "TARGET_DB_IP": "10.0.1.143",
+  "TARGET_REGION": "ap-northeast-2",
+  "TARGET_DB": "",
+  "TARGET_DB_IP": "10.1.11.133",
   "TARGET_CONTAINER": "mysql",
-  "TARGET_SERVER_ID": "6",
+  "TARGET_SERVER_ID": "7",
   "DB_NAME": "dev_meetyDB",
   "PADMIN": "/home/ubuntu/mig/padmin-disk.sh",
   "DB_MAX_CONNECTIONS": "64",
-  "PROXYSQL_MAX_CONNECTIONS": "20",
+  "PROXYSQL_MAX_CONNECTIONS": "40",
   "SOURCE_APP_IP": "10.0.1.97"
 }

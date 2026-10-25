@@ -1,4 +1,4 @@
-# V1 테스트 환경과 V2 서울 간 피어링 경로, 오하이오 DB 복제 접근 권한
+# V1 테스트 환경과 V2 서울 간 피어링 경로, 리허설 DB 접근 권한
 # - 피어링 자체는 v2/terraform/shared에서 만들고 수락한다. 여기서는 오하이오 쪽 경로와 접근 허용만 둔다.
 # - public 라우트 테이블의 경로는 aws_route로 관리한다. route 블록 안에 경로를 추가하면 Terraform이
 #   기존 인터넷 경로까지 지웠다가 다시 만드는 것으로 계획할 수 있어, prod 인터넷 경로를 건드리지 않도록 분리했다.
@@ -43,15 +43,16 @@ resource "aws_security_group" "dev_data_migration" {
   }
 }
 
-# 기존 prod DB 인스턴스를 dev DB의 리허설용 복제본으로 재사용한다.
-# 동일 VPC이므로 복제본의 전용 보안 그룹에서 오는 MySQL 접속만 허용한다.
+# 서울의 격리된 리허설 DB만 dev DB의 binlog에 접속할 수 있도록 고정 사설 IP 하나를 허용한다.
 resource "aws_vpc_security_group_ingress_rule" "dev_data_mysql_from_rehearsal" {
-  security_group_id            = aws_security_group.dev_data_migration.id
-  description                  = "MySQL replication from Ohio rehearsal DB"
-  ip_protocol                  = "tcp"
-  from_port                    = 3306
-  to_port                      = 3306
-  referenced_security_group_id = aws_security_group.prod_data_migration.id
+  count = var.migration_rehearsal_enabled ? 1 : 0
+
+  security_group_id = aws_security_group.dev_data_migration.id
+  description       = "MySQL replication from Seoul migration rehearsal DB"
+  ip_protocol       = "tcp"
+  from_port         = 3306
+  to_port           = 3306
+  cidr_ipv4         = "10.1.11.133/32"
 
   tags = {
     Name    = "dev-data-mysql-from-rehearsal"
@@ -59,30 +60,8 @@ resource "aws_vpc_security_group_ingress_rule" "dev_data_mysql_from_rehearsal" {
   }
 }
 
-# 기존 prod DB의 전용 SG는 재사용한다. 이름·설명 변경으로 SG가 교체되지 않게 유지한다.
-# 기존 data-sg-v1과 app-sg-v1은 dev와 공유하므로 삭제하지 않는다.
-resource "aws_security_group" "prod_data_migration" {
-  name        = "prod-data-migration-sg-v1"
-  description = "V2 prod primary dumps and replicates prod MySQL"
-  vpc_id      = aws_vpc.main.id
-
-  tags = {
-    Name    = "prod-data-migration-sg-v1"
-    Service = "meety"
-  }
-}
-
-# dev ProxySQL에서 리허설 대상 DB로 접속할 수 있도록 정확한 사설 IP만 허용한다.
-resource "aws_vpc_security_group_ingress_rule" "rehearsal_mysql_from_dev_proxysql" {
-  security_group_id = aws_security_group.prod_data_migration.id
-  description       = "MySQL from Ohio dev ProxySQL"
-  ip_protocol       = "tcp"
-  from_port         = 3306
-  to_port           = 3306
-  cidr_ipv4         = "${aws_instance.dev_app.private_ip}/32"
-
-  tags = {
-    Name    = "rehearsal-mysql-from-dev-proxysql"
-    Service = "meety"
-  }
+# 기존 리허설 규칙을 조건부 관리로 옮겨 기본 비활성 상태에서 제거한다.
+moved {
+  from = aws_vpc_security_group_ingress_rule.dev_data_mysql_from_rehearsal
+  to   = aws_vpc_security_group_ingress_rule.dev_data_mysql_from_rehearsal[0]
 }

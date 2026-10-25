@@ -100,8 +100,11 @@ def counts():
 
 
 def preflight():
-    if SETTINGS['SOURCE_REGION'] != 'us-east-2' or SETTINGS['TARGET_REGION'] != 'us-east-2':
-        raise RuntimeError('이 스크립트는 오하이오 리허설 전용이다')
+    # 삭제된 임시 DB를 대상으로 원격 초기화를 시도하지 않는다.
+    if SETTINGS.get('REHEARSAL_ENABLED') != 'true' or not SETTINGS.get('TARGET_DB'):
+        raise RuntimeError('리허설이 비활성 상태입니다. 서버 재생성과 settings.json 갱신 후 활성화하세요.')
+    if SETTINGS['SOURCE_REGION'] != 'us-east-2' or SETTINGS['TARGET_REGION'] != 'ap-northeast-2':
+        raise RuntimeError('오하이오 dev → 서울 리허설 DB 구성만 허용한다')
     if SETTINGS['SOURCE_DB'] == SETTINGS['TARGET_DB'] or SETTINGS['DB_NAME'] != 'dev_meetyDB':
         raise RuntimeError('원본/대상 설정 오류')
     account = aws('us-east-2', 'sts', 'get-caller-identity')['Account']
@@ -191,6 +194,7 @@ def reset(was_running):
                     f"ALTER USER 'dev_meety_user'@'10.0.1.97' IDENTIFIED WITH caching_sha2_password AS '{authhash}'; "
                     "GRANT ALL PRIVILEGES ON dev_meetyDB.* TO 'dev_meety_user'@'10.0.1.97';")
         body = RESET_TARGET.replace('__PASSWORD__', password).replace('__SOURCE_IP__', source_ip)
+        body = body.replace('__TARGET_SERVER_ID__', SETTINGS['TARGET_SERVER_ID'])
         body = body.replace('__APP_USER_SQL__', repr(app_user)).replace('__DB_MAX_CONNECTIONS__', SETTINGS['DB_MAX_CONNECTIONS'])
         remote('TARGET', body, 'rebuild target', private=True)
         prepare_monitor()
@@ -212,7 +216,7 @@ def reset(was_running):
 
 RESET_TARGET = r'''
 # 대상 서버의 영속 설정은 task-66에서 구성했다. 다른 환경에 재사용하지 않는다.
-assert sql('SELECT @@server_id;') == '6'
+assert sql('SELECT @@server_id;') == '__TARGET_SERVER_ID__'
 if status(): sql('STOP REPLICA; RESET REPLICA ALL;')
 backup_dir = pathlib.Path('/root/rehearsal-backups'); backup_dir.mkdir(mode=0o700,exist_ok=True)
 backup = backup_dir / ('before-reset-'+str(time.time_ns())+'.sql')

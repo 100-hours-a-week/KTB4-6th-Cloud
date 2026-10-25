@@ -42,6 +42,34 @@ resource "aws_lb_listener_rule" "fe_server_auth" {
   tags = { Name = "${local.name}-fe-server-auth" }
 }
 
+# 회의 Q&A 채팅은 AI 서버가 BE 내부 API를 조회한다. AI는 FE 인스턴스를 NAT로 사용하므로
+# FE의 고정 출구 IP와 Q&A 내부 경로를 모두 확인해 그 외 내부 API 요청은 계속 차단한다.
+resource "aws_lb_listener_rule" "ai_internal_qna" {
+  listener_arn = data.terraform_remote_state.shared.outputs.https_listener_arn
+  priority     = 203
+
+  condition {
+    host_header {
+      values = ["api.meety.io.kr"]
+    }
+  }
+  condition {
+    source_ip {
+      values = ["${data.terraform_remote_state.prod.outputs.fe_public_ip}/32"]
+    }
+  }
+  condition {
+    path_pattern {
+      values = ["/internal/v1/qna/*"]
+    }
+  }
+  action {
+    type             = "forward"
+    target_group_arn = data.aws_lb_target_group.prod_api.arn
+  }
+  tags = { Name = "${local.name}-ai-internal-qna" }
+}
+
 data "aws_route53_zone" "main" {
   name         = "meety.io.kr."
   private_zone = false

@@ -124,10 +124,25 @@ variable "be_proxysql_image" {
 variable "be_proxysql_max_replication_lag" {
   description = <<-EOT
     Replica를 읽기 대상에서 잠시 빼는 복제 지연 기준(초). 넘으면 읽기가 Primary로 간다.
-    BE의 '쓰기 직후 조회는 Primary' 시간 창이 이 값 + 확인 주기(1초)를 전제로 하므로, 바꿀 때는 BE에 알린다
+    BE의 '쓰기 직후 조회는 Primary' 쿠키(READ_AFTER_WRITE_WINDOW 기본 3초)가 이 값 + 확인 주기(1초) 이상이어야 하므로 2로 둔다.
+    바꿀 때는 BE 쿠키 시간과 같이 맞춘다 (2026-10-25 prod 실측 지연 p50 9ms, 최대 127ms)
   EOT
   type        = number
-  default     = 3
+  default     = 2
+}
+
+variable "be_db_read_enabled" {
+  description = <<-EOT
+    BE 읽기 풀을 ProxySQL 읽기 계정(→ Replica)으로 연결할지 여부.
+    BE에 '쓰기 직후 조회는 Primary' 처리가 배포된 뒤에 켠다. false면 BE는 읽기 풀도 쓰기 계정(→ Primary)을 쓴다
+  EOT
+  type        = bool
+  default     = true
+
+  validation {
+    condition     = !var.be_db_read_enabled || var.be_proxysql_enabled
+    error_message = "be_db_read_enabled는 be_proxysql_enabled가 true일 때만 켤 수 있다 (읽기 계정은 ProxySQL을 거친다)."
+  }
 }
 
 variable "be_api_min_count" {

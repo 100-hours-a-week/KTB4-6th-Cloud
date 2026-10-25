@@ -37,7 +37,8 @@ resource "aws_iam_role_policy" "ecs_execution_params" {
         Action = "ssm:GetParameters"
         Resource = concat(
           ["arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/meety/${var.env}/be/*"],
-          [for name in ["DB_NAME", "DB_USER", "DB_PASSWORD", "REDIS_PASSWORD", "PROXYSQL_ADMIN_PASSWORD", "PROXYSQL_MONITOR_PASSWORD"] :
+          [for name in concat(["DB_NAME", "DB_USER", "DB_PASSWORD", "REDIS_PASSWORD", "PROXYSQL_ADMIN_PASSWORD", "PROXYSQL_MONITOR_PASSWORD"],
+            var.be_db_read_enabled ? ["DB_READ_USER", "DB_READ_PASSWORD"] : []) :
           "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/meety/${var.env}/db/${name}"],
         )
       },

@@ -15,7 +15,9 @@ cfg_str() {
 ADMIN_PASSWORD=$(cfg_str "$PROXYSQL_ADMIN_PASSWORD")
 MONITOR_PASSWORD=$(cfg_str "$PROXYSQL_MONITOR_PASSWORD")
 WRITE_USER=$(cfg_str "$DB_USERNAME")
-WRITE_PASSWORD=$(cfg_str "$DB_PASSWORD")
+WRITE_PASSWORD=$(cfg_str "$DB_PASSWORD")%{ if read_enabled }
+READ_USER=$(cfg_str "$DB_READ_USERNAME")
+READ_PASSWORD=$(cfg_str "$DB_READ_PASSWORD")%{ endif }
 
 umask 077
 cat > /etc/proxysql.cnf <<EOF
@@ -23,9 +25,16 @@ datadir="/var/lib/proxysql"
 
 admin_variables=
 {
-    # 관리 포트는 태스크 안(127.0.0.1)에서만 연다
+    # 관리 포트는 태스크 안(127.0.0.1)에서만 연다. PostgreSQL용 관리 포트도 기본값(0.0.0.0)이라 같이 묶는다
     admin_credentials="admin:$ADMIN_PASSWORD"
     mysql_ifaces="127.0.0.1:6032"
+    pgsql_ifaces="127.0.0.1:6132"
+}
+
+# PostgreSQL 프록시는 쓰지 않는다. ProxySQL 3.0은 기본으로 0.0.0.0:6133을 열므로 태스크 안으로 묶는다
+pgsql_variables=
+{
+    interfaces="127.0.0.1:6133"
 }
 
 mysql_variables=
@@ -56,7 +65,8 @@ mysql_servers=
 # ProxySQL 3.0은 BE → ProxySQL 구간의 caching_sha2_password를 지원하지 않아 이 구간은 mysql_native_password로 인증한다
 mysql_users=
 (
-    { username="$WRITE_USER", password="$WRITE_PASSWORD", default_hostgroup=10, transaction_persistent=1 }
+    { username="$WRITE_USER", password="$WRITE_PASSWORD", default_hostgroup=10, transaction_persistent=1 }%{ if read_enabled },
+    { username="$READ_USER", password="$READ_PASSWORD", default_hostgroup=20, transaction_persistent=1 }%{ endif }
 )
 EOF
 

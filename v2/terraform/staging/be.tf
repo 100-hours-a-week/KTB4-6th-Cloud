@@ -45,7 +45,7 @@ resource "aws_ecs_task_definition" "be" {
     }]
 
     # 비밀값이 아닌 설정. DB와 Redis 주소는 각각의 접속 대상을 참조한다
-    environment = [
+    environment = concat([
       { name = "SPRING_PROFILES_ACTIVE", value = "staging" },
       # staging profile의 ddl-auto create는 기동할 때마다 테이블을 다시 만든다.
       # 첫 기동에서 스키마를 만든 뒤에는 validate로 덮어써 데이터를 유지하고, 엔티티와 스키마 차이는 기동 실패로 드러나게 한다
@@ -80,11 +80,16 @@ resource "aws_ecs_task_definition" "be" {
       # ALB 유휴 타임아웃(60초)과 부하 스크립트의 요청 타임아웃보다 짧게 둔다
       { name = "MIGRATION_WRITE_GATE_MAX_WAIT", value = "30s" },
       { name = "AUTH_ACCESS_TOKEN_COOKIE_NAME", value = "staging_accessToken" },
-    ]
+      ], var.be_db_read_enabled ? [
+      # 읽기 풀은 같은 ProxySQL에 읽기 계정으로 접속하고, ProxySQL이 Replica로 보낸다.
+      # 값이 없으면 BE는 읽기 풀도 쓰기 접속 정보를 쓴다
+      { name = "DB_READ_HOST", value = "127.0.0.1" },
+      { name = "DB_READ_PORT", value = "6033" },
+    ] : [])
 
     # 비밀값은 태스크가 시작할 때 ECS가 Parameter Store에서 읽어 넣는다 (실행 역할 권한).
     # BE는 DB_USERNAME을 읽고, Parameter Store 이름은 DB 인스턴스와 같은 DB_USER를 쓴다
-    secrets = [
+    secrets = concat([
       { name = "DB_NAME", valueFrom = "${local.param_arn_prefix}/db/DB_NAME" },
       { name = "DB_USERNAME", valueFrom = "${local.param_arn_prefix}/db/DB_USER" },
       { name = "DB_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/DB_PASSWORD" },
@@ -96,7 +101,10 @@ resource "aws_ecs_task_definition" "be" {
       { name = "INTERNAL_API_KEY", valueFrom = "${local.param_arn_prefix}/be/INTERNAL_API_KEY" },
       # 게이트 관리 API 토큰(32자 이상). Parameter Store에 값이 없으면 태스크가 시작되지 않는다
       { name = "MIGRATION_WRITE_GATE_ADMIN_TOKEN", valueFrom = "${local.param_arn_prefix}/be/MIGRATION_WRITE_GATE_ADMIN_TOKEN" },
-    ]
+      ], var.be_db_read_enabled ? [
+      { name = "DB_READ_USERNAME", valueFrom = "${local.param_arn_prefix}/db/DB_READ_USER" },
+      { name = "DB_READ_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/DB_READ_PASSWORD" },
+    ] : [])
 
     logConfiguration = {
       logDriver = "awslogs"
@@ -120,15 +128,19 @@ resource "aws_ecs_task_definition" "be" {
       primary_ip          = aws_instance.db.private_ip
       replica_ip          = aws_instance.db_replica.private_ip
       max_replication_lag = var.be_proxysql_max_replication_lag
+      read_enabled        = var.be_db_read_enabled
     })]
 
-    # 앱 계정은 BE와 같은 값을 쓴다
-    secrets = [
+    # 앱 계정(쓰기)과 읽기 계정은 BE와 같은 값을 쓴다
+    secrets = concat([
       { name = "DB_USERNAME", valueFrom = "${local.param_arn_prefix}/db/DB_USER" },
       { name = "DB_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/DB_PASSWORD" },
       { name = "PROXYSQL_ADMIN_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/PROXYSQL_ADMIN_PASSWORD" },
       { name = "PROXYSQL_MONITOR_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/PROXYSQL_MONITOR_PASSWORD" },
-    ]
+      ], var.be_db_read_enabled ? [
+      { name = "DB_READ_USERNAME", valueFrom = "${local.param_arn_prefix}/db/DB_READ_USER" },
+      { name = "DB_READ_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/DB_READ_PASSWORD" },
+    ] : [])
 
     # 접속 포트가 열렸는지만 본다. DB 상태까지 보면 DB 장애 때 태스크가 계속 교체되므로 넣지 않는다
     healthCheck = {

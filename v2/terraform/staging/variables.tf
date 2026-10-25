@@ -109,6 +109,27 @@ variable "be_migration_write_gate_enabled" {
   default     = false
 }
 
+variable "be_proxysql_enabled" {
+  description = "BE 태스크에 ProxySQL 사이드카를 붙여 DB 접속을 ProxySQL로 거칠지 여부. false로 배포하면 BE가 Primary에 직접 접속하던 구성으로 돌아간다"
+  type        = bool
+  default     = true
+}
+
+variable "be_proxysql_image" {
+  description = "ProxySQL 사이드카 이미지. V1 dev 이전 리허설에서 쓴 버전과 같다"
+  type        = string
+  default     = "proxysql/proxysql:3.0.11"
+}
+
+variable "be_proxysql_max_replication_lag" {
+  description = <<-EOT
+    Replica를 읽기 대상에서 잠시 빼는 복제 지연 기준(초). 넘으면 읽기가 Primary로 간다.
+    BE의 '쓰기 직후 조회는 Primary' 시간 창이 이 값 + 확인 주기(1초)를 전제로 하므로, 바꿀 때는 BE에 알린다
+  EOT
+  type        = number
+  default     = 3
+}
+
 variable "be_api_min_count" {
   description = "be-api 최소 태스크 수. 설계값은 2지만 staging은 사용량이 적어 1로 둔다 (부하 테스트 후 조정)"
   type        = number

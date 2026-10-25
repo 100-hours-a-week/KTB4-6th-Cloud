@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# BE 태스크의 ProxySQL 사이드카 시작 스크립트. Terraform이 주소와 기준값을 채워 태스크 정의의 command로 넘긴다 (be.tf).
+# 비밀번호는 ECS가 Parameter Store에서 읽어 환경변수로 넣고, 이 스크립트가 설정 파일에 채운다.
+# 설정은 시작할 때마다 이 내용으로 새로 만든다(--initial). 실행 중 관리 포트에서 바꾼 값은 태스크가 바뀌면 사라진다
+set -euo pipefail
+
+# libconfig 문자열 안에서 역슬래시와 큰따옴표가 깨지지 않게 이스케이프한다
+cfg_str() {
+  local s=$1
+  s=$${s//\\/\\\\}
+  s=$${s//\"/\\\"}
+  printf '%s' "$s"
+}
+
+ADMIN_PASSWORD=$(cfg_str "$PROXYSQL_ADMIN_PASSWORD")
+MONITOR_PASSWORD=$(cfg_str "$PROXYSQL_MONITOR_PASSWORD")
+WRITE_USER=$(cfg_str "$DB_USERNAME")
+WRITE_PASSWORD=$(cfg_str "$DB_PASSWORD")
+
+umask 077
+cat > /etc/proxysql.cnf <<EOF
+datadir="/var/lib/proxysql"
+
+admin_variables=
+{
+    # 관리 포트는 태스크 안(127.0.0.1)에서만 연다
+    admin_credentials="admin:$ADMIN_PASSWORD"
+    mysql_ifaces="127.0.0.1:6032"
+}
+
+mysql_variables=
+{
+    # 작업 스레드 수. BE와 태스크 자원을 나눠 쓰므로 기본 4에서 줄인다
+    threads=2
+    # BE는 같은 태스크 안에서만 접속한다
+    interfaces="127.0.0.1:6033"
+    # DB 상태 확인 계정. Primary에서 만들어 Replica로 복제한다
+    monitor_username="proxysql_monitor"
+    monitor_password="$MONITOR_PASSWORD"
+    # Replica 지연 확인 주기(ms). 기본 10초로는 지연 기준(초 단위)을 지킬 수 없어 1초로 줄인다
+    monitor_replication_lag_interval=1000
+}
+
+# DB 계정이 caching_sha2_password라 MySQL에는 TLS로 접속한다
+mysql_servers=
+(
+    # 쓰기 그룹 10: Primary
+    { hostgroup=10, address="${primary_ip}", port=3306, use_ssl=1, comment="primary" },
+    # 읽기 그룹 20: Replica를 주로 쓰고, Replica가 기준보다 늦거나 내려가면 Primary로 넘어간다.
+    # Primary 줄은 복제 상태가 없어 지연 값이 NULL이므로 지연 기준을 끈다(0). 켜면 Primary까지 빠진다
+    { hostgroup=20, address="${replica_ip}", port=3306, use_ssl=1, weight=1000, max_replication_lag=${max_replication_lag}, comment="replica" },
+    { hostgroup=20, address="${primary_ip}", port=3306, use_ssl=1, weight=1, max_replication_lag=0, comment="primary-fallback" }
+)
+
+# 계정별로 그룹을 나눈다. SQL 내용으로 나누는 규칙(mysql_query_rules)은 쓰지 않는다.
+# ProxySQL 3.0은 BE → ProxySQL 구간의 caching_sha2_password를 지원하지 않아 이 구간은 mysql_native_password로 인증한다
+mysql_users=
+(
+    { username="$WRITE_USER", password="$WRITE_PASSWORD", default_hostgroup=10, transaction_persistent=1 }
+)
+EOF
+
+exec proxysql -f --idle-threads --initial -c /etc/proxysql.cnf -D /var/lib/proxysql

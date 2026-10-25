@@ -81,6 +81,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jdbc-class", help="javac --release 17로 컴파일한 MigrationJdbcProbe.class")
     args = parser.parse_args()
+    # 종료된 리허설의 독립 ProxySQL 컨테이너도 생성하지 않는다.
+    if SETTINGS.get("REHEARSAL_ENABLED") != "true" or not SETTINGS.get("TARGET_DB"):
+        raise SystemExit("리허설이 비활성 상태입니다. 서버 재생성과 settings.json 갱신 후 활성화하세요.")
     # 이름이 충돌하면 기존 컨테이너를 삭제하지 않고 중단한다.
     names = run(["docker", "ps", "-a", "--format", "{{.Names}} "]).split()
     if NAME in names:

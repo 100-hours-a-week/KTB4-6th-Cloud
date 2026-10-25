@@ -40,3 +40,11 @@ v1/migration/live-*.tsv
 v1/migration/segments-*.tsv
 v1/migration/k6-*.out
 v1/migration/verify-*.txt
+
+# 리허설 종료 후에도 로컬 원본 결과는 보존하되 실행별 로그와 대시보드는 커밋하지 않는다.
+v1/migration/collect-*.out
+v1/migration/preflight-*.out
+v1/migration/reset-*.out
+v1/migration/switch-*.out
+v1/migration/verify-*.out
+v1/migration/k6-*.html

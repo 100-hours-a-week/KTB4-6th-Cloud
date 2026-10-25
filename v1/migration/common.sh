@@ -5,6 +5,9 @@ PROFILE=${AWS_PROFILE:-meety-admin}
 settings_lines=$(python3 - "$MIGRATION_DIR/settings.json" <<'PY'
 import json, shlex, sys
 settings = json.load(open(sys.argv[1]))
+# 종료된 임시 DB를 향한 SSM·복제·전환 작업은 AWS 호출 전에 차단한다.
+if settings.get('REHEARSAL_ENABLED') != 'true' or not settings.get('TARGET_DB'):
+    sys.exit('리허설이 비활성 상태입니다. 서버 재생성과 settings.json 갱신 후 활성화하세요.')
 for key, value in settings.items():
     print(f'{key}={shlex.quote(value)}')
 PY
@@ -18,7 +21,7 @@ ssm_run() {
   local region=$1 instance=$2 script=$3 params cid status=Pending
   params=$(python3 -c 'import json,sys; print(json.dumps({"commands":["set -eu\n"+sys.argv[1]],"executionTimeout":["900"]}))' "$script") || return 1
   cid=$(aws ssm send-command --profile "$PROFILE" --region "$region" --instance-ids "$instance" \
-    --document-name AWS-RunShellScript --comment "Ohio DB rehearsal" \
+    --document-name AWS-RunShellScript --comment "Ohio-to-Seoul DB rehearsal" \
     --parameters "$params" --query Command.CommandId --output text) || return 1
   for _ in $(seq 1 3000); do
     status=$(aws ssm get-command-invocation --profile "$PROFILE" --region "$region" \
@@ -43,7 +46,7 @@ proxysql() { ssm_run "$SOURCE_REGION" "$SOURCE_APP" "$1"; }
 validate_targets() {
   # 계정·인스턴스 IP·MySQL 식별자를 확인하기 전에는 원격 변경 명령을 보내지 않는다.
   local account ip identity
-  [ "$SOURCE_REGION" = us-east-2 ] && [ "$TARGET_REGION" = us-east-2 ] \
+  [ "$SOURCE_REGION" = us-east-2 ] && [ "$TARGET_REGION" = ap-northeast-2 ] \
     && [ "$SOURCE_DB" != "$TARGET_DB" ] && [ "$DB_NAME" = dev_meetyDB ] || return 1
   account=$(aws sts get-caller-identity --profile "$PROFILE" --query Account --output text) || return 1
   [ "$account" = "$ACCOUNT_ID" ] || return 1

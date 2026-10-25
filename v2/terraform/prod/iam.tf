@@ -23,7 +23,7 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# BE 컨테이너에 넣을 비밀값 읽기. DB 값은 BE가 쓰는 것만 허용하고 DB_ROOT_PASSWORD는 뺀다
+# BE 컨테이너와 ProxySQL 사이드카에 넣을 비밀값 읽기. DB 값은 둘이 쓰는 것만 허용하고 DB_ROOT_PASSWORD는 뺀다
 resource "aws_iam_role_policy" "ecs_execution_params" {
   name = "read-be-params"
   role = aws_iam_role.ecs_execution.id
@@ -37,7 +37,8 @@ resource "aws_iam_role_policy" "ecs_execution_params" {
         Action = "ssm:GetParameters"
         Resource = concat(
           ["arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/meety/${var.env}/be/*"],
-          [for name in ["DB_NAME", "DB_USER", "DB_PASSWORD", "REDIS_PASSWORD"] :
+          [for name in concat(["DB_NAME", "DB_USER", "DB_PASSWORD", "REDIS_PASSWORD", "PROXYSQL_ADMIN_PASSWORD", "PROXYSQL_MONITOR_PASSWORD"],
+            var.be_db_read_enabled ? ["DB_READ_USER", "DB_READ_PASSWORD"] : []) :
           "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/meety/${var.env}/db/${name}"],
         )
       },

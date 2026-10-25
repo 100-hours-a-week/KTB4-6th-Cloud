@@ -28,7 +28,8 @@ resource "aws_ecs_task_definition" "be" {
     cpu_architecture        = "X86_64"
   }
 
-  container_definitions = jsonencode([{
+  # be 컨테이너와, 켜져 있으면 ProxySQL 사이드카를 함께 띄운다
+  container_definitions = jsonencode(concat([{
     name      = "be"
     image     = var.be_image
     essential = true
@@ -36,21 +37,24 @@ resource "aws_ecs_task_definition" "be" {
     # 종료 신호(SIGTERM)를 받은 뒤 강제 종료까지 기다리는 시간. Fargate 최대값으로 두어 진행 중인 처리를 마칠 시간을 준다
     stopTimeout = 120
 
+    # ProxySQL이 접속을 받을 수 있게 된 뒤 시작한다. 종료는 반대 순서라 BE가 진행 중인 DB 처리를 마친 뒤 ProxySQL이 내려간다
+    dependsOn = var.be_proxysql_enabled ? [{ containerName = "proxysql", condition = "HEALTHY" }] : []
+
     portMappings = [{
       containerPort = var.be_container_port
       protocol      = "tcp"
     }]
 
     # 비밀값이 아닌 설정. DB와 Redis 주소는 각각의 접속 대상을 참조한다
-    environment = [
+    environment = concat([
       { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
       # prod profile 기본값(update) 대신 validate로 두어, 엔티티와 스키마 차이를 기동 실패로 드러낸다. 스키마 변경은 Flyway로 한다
       { name = "SPRING_JPA_HIBERNATE_DDL_AUTO", value = var.be_ddl_auto },
       # V1 dev, prod와 같이 KST로 동작한다. 기존 데이터 시각이 KST로 저장돼 있어 마이그레이션 후에도 맞아야 한다
       { name = "TZ", value = "Asia/Seoul" },
-      # 읽기 분산(Read Replica)은 BE 설정이 정해지면 추가한다. 지금은 Primary만 쓴다
-      { name = "DB_HOST", value = aws_instance.db["primary"].private_ip },
-      { name = "DB_PORT", value = "3306" },
+      # ProxySQL을 켜면 같은 태스크의 ProxySQL(127.0.0.1:6033)을 거쳐 DB에 접속한다
+      { name = "DB_HOST", value = var.be_proxysql_enabled ? "127.0.0.1" : aws_instance.db["primary"].private_ip },
+      { name = "DB_PORT", value = var.be_proxysql_enabled ? "6033" : "3306" },
       { name = "REDIS_HOST", value = local.be_redis_host },
       { name = "REDIS_PORT", value = "6379" },
       { name = "KAKAO_REDIRECT_URI", value = var.be_kakao_redirect_uri },
@@ -79,11 +83,16 @@ resource "aws_ecs_task_definition" "be" {
       { name = "OTEL_LOGS_EXPORTER", value = "none" },
       { name = "OTEL_METRICS_EXPORTER", value = "none" },
       { name = "OTEL_TRACES_EXPORTER", value = "none" },
-    ]
+      ], var.be_db_read_enabled ? [
+      # 읽기 풀은 같은 ProxySQL에 읽기 계정으로 접속하고, ProxySQL이 Replica로 보낸다.
+      # 값이 없으면 BE는 읽기 풀도 쓰기 접속 정보를 쓴다
+      { name = "DB_READ_HOST", value = "127.0.0.1" },
+      { name = "DB_READ_PORT", value = "6033" },
+    ] : [])
 
     # 비밀값은 태스크가 시작할 때 ECS가 Parameter Store에서 읽어 넣는다 (실행 역할 권한).
     # BE는 DB_USERNAME을 읽고, Parameter Store 이름은 DB 인스턴스와 같은 DB_USER를 쓴다
-    secrets = [
+    secrets = concat([
       { name = "DB_NAME", valueFrom = "${local.param_arn_prefix}/db/DB_NAME" },
       { name = "DB_USERNAME", valueFrom = "${local.param_arn_prefix}/db/DB_USER" },
       { name = "DB_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/DB_PASSWORD" },
@@ -94,7 +103,10 @@ resource "aws_ecs_task_definition" "be" {
       { name = "KAKAO_ADMIN_KEY", valueFrom = "${local.param_arn_prefix}/be/KAKAO_ADMIN_KEY" },
       { name = "INTERNAL_API_KEY", valueFrom = "${local.param_arn_prefix}/be/INTERNAL_API_KEY" },
       { name = "SENTRY_DSN", valueFrom = "${local.param_arn_prefix}/be/SENTRY_DSN" },
-    ]
+      ], var.be_db_read_enabled ? [
+      { name = "DB_READ_USERNAME", valueFrom = "${local.param_arn_prefix}/db/DB_READ_USER" },
+      { name = "DB_READ_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/DB_READ_PASSWORD" },
+    ] : [])
 
     logConfiguration = {
       logDriver = "awslogs"
@@ -104,7 +116,52 @@ resource "aws_ecs_task_definition" "be" {
         awslogs-stream-prefix = "be"
       }
     }
-  }])
+    }], var.be_proxysql_enabled ? [{
+    # ProxySQL 사이드카: BE의 DB 접속을 계정에 따라 Primary(쓰기)와 Replica(읽기)로 보낸다.
+    # 설정과 시작 순서는 proxysql/start.sh.tftpl에 있다
+    name      = "proxysql"
+    image     = var.be_proxysql_image
+    essential = true
+
+    # 작은 상한에 걸려 강제 종료되면 태스크 전체가 내려가므로 상한 없이 예약만 잡는다. 실측 후 조정한다
+    memoryReservation = 256
+
+    command = ["bash", "-c", templatefile("${path.module}/proxysql/start.sh.tftpl", {
+      primary_ip          = aws_instance.db["primary"].private_ip
+      replica_ip          = aws_instance.db["replica"].private_ip
+      max_replication_lag = var.be_proxysql_max_replication_lag
+      read_enabled        = var.be_db_read_enabled
+    })]
+
+    # 앱 계정(쓰기)과 읽기 계정은 BE와 같은 값을 쓴다
+    secrets = concat([
+      { name = "DB_USERNAME", valueFrom = "${local.param_arn_prefix}/db/DB_USER" },
+      { name = "DB_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/DB_PASSWORD" },
+      { name = "PROXYSQL_ADMIN_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/PROXYSQL_ADMIN_PASSWORD" },
+      { name = "PROXYSQL_MONITOR_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/PROXYSQL_MONITOR_PASSWORD" },
+      ], var.be_db_read_enabled ? [
+      { name = "DB_READ_USERNAME", valueFrom = "${local.param_arn_prefix}/db/DB_READ_USER" },
+      { name = "DB_READ_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/DB_READ_PASSWORD" },
+    ] : [])
+
+    # 접속 포트가 열렸는지만 본다. DB 상태까지 보면 DB 장애 때 태스크가 계속 교체되므로 넣지 않는다
+    healthCheck = {
+      command     = ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/6033"]
+      interval    = 10
+      timeout     = 3
+      retries     = 3
+      startPeriod = 10
+    }
+
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        awslogs-group         = aws_cloudwatch_log_group.be.name
+        awslogs-region        = var.region
+        awslogs-stream-prefix = "proxysql"
+      }
+    }
+  }] : []))
 
   tags = {
     Name = "${local.name_prefix}-be"

@@ -68,6 +68,15 @@ mysql_users=
     { username="$WRITE_USER", password="$WRITE_PASSWORD", default_hostgroup=10, transaction_persistent=1 }%{ if read_enabled },
     { username="$READ_USER", password="$READ_PASSWORD", default_hostgroup=20, transaction_persistent=1 }%{ endif }
 )
+
+# 보낼 곳을 정하는 규칙이 아니다(destination_hostgroup 없음). 연결 묶임만 막는다.
+# Connector/J와 Hikari는 연결할 때 @@ 시스템 변수를 읽는 쿼리를 보낸다(초기 설정, transaction_read_only, transaction_isolation).
+# ProxySQL은 @가 든 쿼리를 사용자 변수로 보고 그 연결을 처음 붙은 백엔드에 계속 묶는다.
+# Replica에 묶인 연결은 Replica가 빠질 때 옮기지 못해 끊긴다 (2026-10-26 staging 장애 시험, 로컬 재현으로 확인)
+mysql_query_rules=
+(
+    { rule_id=1, active=1, match_digest="^SELECT @@session\\.(auto_increment_increment AS auto_increment_increment|transaction_read_only$|transaction_isolation$)", multiplex=2, apply=0 }
+)
 EOF
 
 exec proxysql -f --idle-threads --initial -c /etc/proxysql.cnf -D /var/lib/proxysql

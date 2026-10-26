@@ -55,16 +55,6 @@ resource "aws_lb_listener_rule" "be_realtime" {
   listener_arn = local.shared.https_listener_arn
   priority     = 200
 
-  # 전달 동작은 계속 ECS가 관리하고, 점검 중에만 접속 IP 조건을 추가한다.
-  dynamic "condition" {
-    for_each = length(var.maintenance_allowed_cidrs) == 0 ? [] : [true]
-    content {
-      source_ip {
-        values = var.maintenance_allowed_cidrs
-      }
-    }
-  }
-
   condition {
     host_header {
       values = [var.be_domain]
@@ -194,15 +184,6 @@ resource "aws_lb_listener_rule" "be_api" {
   listener_arn = local.shared.https_listener_arn
   priority     = 205
 
-  dynamic "condition" {
-    for_each = length(var.maintenance_allowed_cidrs) == 0 ? [] : [true]
-    content {
-      source_ip {
-        values = var.maintenance_allowed_cidrs
-      }
-    }
-  }
-
   condition {
     host_header {
       values = [var.be_domain]
@@ -247,15 +228,6 @@ resource "aws_lb_target_group" "fe" {
 resource "aws_lb_listener_rule" "fe" {
   listener_arn = local.shared.https_listener_arn
   priority     = 210
-
-  dynamic "condition" {
-    for_each = length(var.maintenance_allowed_cidrs) == 0 ? [] : [true]
-    content {
-      source_ip {
-        values = var.maintenance_allowed_cidrs
-      }
-    }
-  }
 
   condition {
     host_header {

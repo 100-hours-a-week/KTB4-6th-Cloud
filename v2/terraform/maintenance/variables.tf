@@ -9,14 +9,3 @@ variable "maintenance_domain" {
   type        = string
   default     = "maintenance.meety.io.kr"
 }
-
-variable "maintenance_allowed_cidrs" {
-  description = "점검 중 실제 서비스 이용을 허용할 공인 IP. 실시간 규칙의 조건 개수 제한으로 현재 CIDR 1개를 지원한다"
-  type        = list(string)
-  default     = ["211.244.225.164/32"]
-
-  validation {
-    condition     = length(var.maintenance_allowed_cidrs) == 1 && alltrue([for cidr in var.maintenance_allowed_cidrs : can(cidrhost(cidr, 0)) && !endswith(cidr, "/0")])
-    error_message = "공인 IP의 CIDR 1개를 지정하세요. 전체 주소 허용(/0)은 사용할 수 없습니다."
-  }
-}

@@ -7,69 +7,6 @@ data "terraform_remote_state" "shared" {
   }
 }
 
-data "terraform_remote_state" "prod" {
-  backend = "local"
-  config = {
-    path = "${path.module}/../prod/terraform.tfstate"
-  }
-}
-
-# 인증 콜백·토큰 갱신은 브라우저 대신 FE 서버가 BE를 호출한다.
-# FE의 고정 출구 IP와 인증 경로를 모두 확인해 일반 외부 요청은 계속 차단한다.
-resource "aws_lb_listener_rule" "fe_server_auth" {
-  listener_arn = data.terraform_remote_state.shared.outputs.https_listener_arn
-  priority     = 204
-
-  condition {
-    host_header {
-      values = ["api.meety.io.kr"]
-    }
-  }
-  condition {
-    source_ip {
-      values = ["${data.terraform_remote_state.prod.outputs.fe_public_ip}/32"]
-    }
-  }
-  condition {
-    path_pattern {
-      values = ["/api/v1/auth/*"]
-    }
-  }
-  action {
-    type             = "forward"
-    target_group_arn = data.aws_lb_target_group.prod_api.arn
-  }
-  tags = { Name = "${local.name}-fe-server-auth" }
-}
-
-# 회의 Q&A 채팅은 AI 서버가 BE 내부 API를 조회한다. AI는 FE 인스턴스를 NAT로 사용하므로
-# FE의 고정 출구 IP와 Q&A 내부 경로를 모두 확인해 그 외 내부 API 요청은 계속 차단한다.
-resource "aws_lb_listener_rule" "ai_internal_qna" {
-  listener_arn = data.terraform_remote_state.shared.outputs.https_listener_arn
-  priority     = 203
-
-  condition {
-    host_header {
-      values = ["api.meety.io.kr"]
-    }
-  }
-  condition {
-    source_ip {
-      values = ["${data.terraform_remote_state.prod.outputs.fe_public_ip}/32"]
-    }
-  }
-  condition {
-    path_pattern {
-      values = ["/internal/v1/qna/*"]
-    }
-  }
-  action {
-    type             = "forward"
-    target_group_arn = data.aws_lb_target_group.prod_api.arn
-  }
-  tags = { Name = "${local.name}-ai-internal-qna" }
-}
-
 data "aws_route53_zone" "main" {
   name         = "meety.io.kr."
   private_zone = false
@@ -282,6 +219,8 @@ resource "aws_route53_record" "page" {
   }
 }
 
+# 기존 prod 라우팅(200/205/210)보다 앞에 둔다. 평상시에는 헤더를 명시한 요청만 점검 안내를 미리 보고,
+# 점검 중에는 헤더 조건을 빼서 헬스 체크(188/189)를 제외한 모든 요청에 점검 안내를 응답한다.
 resource "aws_lb_listener_rule" "preview_fe" {
   listener_arn = data.terraform_remote_state.shared.outputs.https_listener_arn
   priority     = 190
@@ -291,12 +230,13 @@ resource "aws_lb_listener_rule" "preview_fe" {
       values = ["meety.io.kr"]
     }
   }
-
-  # 허용 IP에서도 헤더를 명시하면 점검 안내를 미리 확인할 수 있다.
-  condition {
-    http_header {
-      http_header_name = "X-Meety-Maintenance-Preview"
-      values           = ["1"]
+  dynamic "condition" {
+    for_each = var.maintenance_enabled ? [] : [true]
+    content {
+      http_header {
+        http_header_name = "X-Meety-Maintenance-Preview"
+        values           = ["1"]
+      }
     }
   }
 
@@ -368,11 +308,13 @@ resource "aws_lb_listener_rule" "preview_api" {
       values = ["api.meety.io.kr"]
     }
   }
-
-  condition {
-    http_header {
-      http_header_name = "X-Meety-Maintenance-Preview"
-      values           = ["1"]
+  dynamic "condition" {
+    for_each = var.maintenance_enabled ? [] : [true]
+    content {
+      http_header {
+        http_header_name = "X-Meety-Maintenance-Preview"
+        values           = ["1"]
+      }
     }
   }
 
@@ -403,74 +345,4 @@ moved {
 moved {
   from = aws_lb_listener_rule.maintenance_api
   to   = aws_lb_listener_rule.preview_api
-}
-
-# 기존 prod 라우팅(200/205/210) 뒤에 둔다. 점검 중 허용 IP는 기존 규칙에 일치하고,
-# 그 외 요청만 이 규칙으로 내려오므로 ECS의 실시간 가중치를 복제할 필요가 없다.
-resource "aws_lb_listener_rule" "fallback_fe" {
-  listener_arn = data.terraform_remote_state.shared.outputs.https_listener_arn
-  priority     = 220
-
-  condition {
-    host_header {
-      values = ["meety.io.kr"]
-    }
-  }
-  dynamic "condition" {
-    for_each = var.maintenance_enabled ? [] : [true]
-    content {
-      http_header {
-        http_header_name = "X-Meety-Maintenance-Preview"
-        values           = ["1"]
-      }
-    }
-  }
-  action {
-    type = "redirect"
-    redirect {
-      protocol    = "HTTPS"
-      port        = "443"
-      host        = var.maintenance_domain
-      path        = "/"
-      query       = ""
-      status_code = "HTTP_302"
-    }
-  }
-  tags       = { Name = "${local.name}-fallback-fe" }
-  depends_on = [aws_route53_record.page, aws_s3_bucket_policy.page]
-}
-
-resource "aws_lb_listener_rule" "fallback_api" {
-  listener_arn = data.terraform_remote_state.shared.outputs.https_listener_arn
-  priority     = 221
-
-  condition {
-    host_header {
-      values = ["api.meety.io.kr"]
-    }
-  }
-  dynamic "condition" {
-    for_each = var.maintenance_enabled ? [] : [true]
-    content {
-      http_header {
-        http_header_name = "X-Meety-Maintenance-Preview"
-        values           = ["1"]
-      }
-    }
-  }
-  action {
-    type = "fixed-response"
-    fixed_response {
-      content_type = "application/json"
-      status_code  = "503"
-      message_body = jsonencode({
-        success        = false
-        code           = "SERVICE_MAINTENANCE"
-        message        = "서비스 점검 중입니다. 잠시 후 다시 이용해 주세요."
-        maintenanceUrl = "https://${var.maintenance_domain}/"
-      })
-    }
-  }
-  tags       = { Name = "${local.name}-fallback-api" }
-  depends_on = [aws_route53_record.page, aws_s3_bucket_policy.page]
 }

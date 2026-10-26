@@ -103,20 +103,8 @@ import {
 }
 
 # ---------- ec2 ----------
-import {
-  to = aws_instance.dev_app
-  id = "i-076b39ef84ef3ddf9"
-}
 
-import {
-  to = aws_instance.dev_ai
-  id = "i-0007c84fb4f41d24c"
-}
 
-import {
-  to = aws_instance.dev_data
-  id = "i-00b1191f61901d977"
-}
 
 # ---------- s3 ----------
 import {

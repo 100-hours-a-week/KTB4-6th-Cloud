@@ -489,83 +489,6 @@ resource "aws_iam_role_policy_attachment" "ec2_prod_params_editor" {
   role       = "meety-ec2-prod"
 }
 
-resource "aws_instance" "dev_ai" {
-  lifecycle {
-    # 중지 후 자동 할당 공인 IP가 사라져도 기존 서버를 재생성하지 않는다.
-    ignore_changes = [associate_public_ip_address]
-  }
-
-  ami                                  = "ami-0e5497a77ef21b5ac"
-  associate_public_ip_address          = true
-  availability_zone                    = "us-east-2a"
-  disable_api_stop                     = false
-  disable_api_termination              = false
-  ebs_optimized                        = true
-  force_destroy                        = false
-  get_password_data                    = false
-  hibernation                          = false
-  iam_instance_profile                 = "meety-ec2-cloudwatch-role"
-  instance_initiated_shutdown_behavior = "stop"
-  instance_type                        = "t3.micro"
-  ipv6_address_count                   = 0
-  key_name                             = "meety-v1"
-  monitoring                           = false
-  placement_partition_number           = 0
-  private_ip                           = "10.0.1.188"
-  region                               = "us-east-2"
-  secondary_private_ips                = []
-  security_groups                      = []
-  source_dest_check                    = true
-  subnet_id                            = "subnet-0eb391e5688b1e282"
-  tags = {
-    Name    = "dev-ai-v1"
-    Service = "meety-staging"
-  }
-  tags_all = {
-    Name    = "dev-ai-v1"
-    Service = "meety-staging"
-  }
-  tenancy                = "default"
-  vpc_security_group_ids = ["sg-0769decbce98ab96b", "sg-0cb07d86ec124f4bc"]
-  capacity_reservation_specification {
-    capacity_reservation_preference = "open"
-  }
-  cpu_options {
-    core_count       = 1
-    threads_per_core = 2
-  }
-  credit_specification {
-    cpu_credits = "unlimited"
-  }
-  enclave_options {
-    enabled = false
-  }
-  maintenance_options {
-    auto_recovery = "default"
-  }
-  metadata_options {
-    http_endpoint               = "enabled"
-    http_protocol_ipv6          = "disabled"
-    http_put_response_hop_limit = 2
-    http_tokens                 = "required"
-    instance_metadata_tags      = "disabled"
-  }
-  private_dns_name_options {
-    enable_resource_name_dns_a_record    = false
-    enable_resource_name_dns_aaaa_record = false
-    hostname_type                        = "ip-name"
-  }
-  root_block_device {
-    delete_on_termination = true
-    encrypted             = false
-    iops                  = 3000
-    tags                  = {}
-    tags_all              = {}
-    throughput            = 125
-    volume_size           = 30
-    volume_type           = "gp3"
-  }
-}
 
 resource "aws_vpc_security_group_ingress_rule" "app_https" {
   cidr_ipv4         = "0.0.0.0/0"
@@ -614,8 +537,8 @@ resource "aws_iam_role_policy" "github_actions_ssm" {
       Action = "ssm:SendCommand"
       Effect = "Allow"
       Resource = [
-        aws_instance.dev_app.arn,
-        aws_instance.dev_ai.arn,
+        "arn:aws:ec2:us-east-2:${local.account_id}:instance/i-076b39ef84ef3ddf9",
+        "arn:aws:ec2:us-east-2:${local.account_id}:instance/i-0007c84fb4f41d24c",
         "arn:aws:ssm:us-east-2::document/AWS-RunShellScript",
       ]
       Sid = "SendDeployCommand"
@@ -837,84 +760,6 @@ resource "aws_s3_bucket_policy" "dev" {
   region = "us-east-2"
 }
 
-resource "aws_instance" "dev_data" {
-  lifecycle {
-    # 중지 후 자동 할당 공인 IP가 사라져도 기존 DB와 볼륨을 보존한다.
-    ignore_changes = [associate_public_ip_address]
-  }
-
-  ami                                  = "ami-0e5497a77ef21b5ac"
-  associate_public_ip_address          = true
-  availability_zone                    = "us-east-2a"
-  disable_api_stop                     = false
-  disable_api_termination              = false
-  ebs_optimized                        = true
-  force_destroy                        = false
-  get_password_data                    = false
-  hibernation                          = false
-  iam_instance_profile                 = "meety-ec2-cloudwatch-role"
-  instance_initiated_shutdown_behavior = "stop"
-  instance_type                        = "t3.micro"
-  ipv6_address_count                   = 0
-  key_name                             = "meety-v1"
-  monitoring                           = false
-  placement_partition_number           = 0
-  private_ip                           = "10.0.1.147"
-  region                               = "us-east-2"
-  secondary_private_ips                = []
-  security_groups                      = []
-  source_dest_check                    = true
-  subnet_id                            = "subnet-0eb391e5688b1e282"
-  tags = {
-    Name    = "dev-data-v1"
-    Service = "meety-staging"
-  }
-  tags_all = {
-    Name    = "dev-data-v1"
-    Service = "meety-staging"
-  }
-  tenancy = "default"
-  # dev_data_migration: V2 staging DB의 3306 접근 허용 (migration.tf)
-  vpc_security_group_ids = ["sg-016d5ef2c40006305", "sg-0769decbce98ab96b", aws_security_group.dev_data_migration.id]
-  capacity_reservation_specification {
-    capacity_reservation_preference = "open"
-  }
-  cpu_options {
-    core_count       = 1
-    threads_per_core = 2
-  }
-  credit_specification {
-    cpu_credits = "unlimited"
-  }
-  enclave_options {
-    enabled = false
-  }
-  maintenance_options {
-    auto_recovery = "default"
-  }
-  metadata_options {
-    http_endpoint               = "enabled"
-    http_protocol_ipv6          = "disabled"
-    http_put_response_hop_limit = 2
-    http_tokens                 = "required"
-    instance_metadata_tags      = "disabled"
-  }
-  private_dns_name_options {
-    enable_resource_name_dns_a_record    = false
-    enable_resource_name_dns_aaaa_record = false
-    hostname_type                        = "ip-name"
-  }
-  root_block_device {
-    delete_on_termination = true
-    encrypted             = false
-    iops                  = 3000
-    tags                  = {}
-    tags_all              = {}
-    throughput            = 125
-    volume_size           = 30
-    volume_type           = "gp3"
-  }
-}
 
 resource "aws_vpc_security_group_ingress_rule" "data_mysql_from_app" {
   from_port                    = 3306
@@ -994,83 +839,6 @@ resource "aws_iam_role" "ec2_prod" {
   }
 }
 
-resource "aws_instance" "dev_app" {
-  lifecycle {
-    # 중지 후 자동 할당 공인 IP가 사라져도 기존 서버를 재생성하지 않는다.
-    ignore_changes = [associate_public_ip_address]
-  }
-
-  ami                                  = "ami-0e5497a77ef21b5ac"
-  associate_public_ip_address          = true
-  availability_zone                    = "us-east-2a"
-  disable_api_stop                     = false
-  disable_api_termination              = false
-  ebs_optimized                        = true
-  force_destroy                        = false
-  get_password_data                    = false
-  hibernation                          = false
-  iam_instance_profile                 = "meety-ec2-v1-dev"
-  instance_initiated_shutdown_behavior = "stop"
-  instance_type                        = "t3.small"
-  ipv6_address_count                   = 0
-  key_name                             = "meety-v1"
-  monitoring                           = false
-  placement_partition_number           = 0
-  private_ip                           = "10.0.1.97"
-  region                               = "us-east-2"
-  secondary_private_ips                = []
-  security_groups                      = []
-  source_dest_check                    = true
-  subnet_id                            = "subnet-0eb391e5688b1e282"
-  tags = {
-    Name    = "dev-app-v1"
-    Service = "meety-staging"
-  }
-  tags_all = {
-    Name    = "dev-app-v1"
-    Service = "meety-staging"
-  }
-  tenancy                = "default"
-  vpc_security_group_ids = ["sg-0769decbce98ab96b", "sg-09ac11928cda5a281"]
-  capacity_reservation_specification {
-    capacity_reservation_preference = "open"
-  }
-  cpu_options {
-    core_count       = 1
-    threads_per_core = 2
-  }
-  credit_specification {
-    cpu_credits = "unlimited"
-  }
-  enclave_options {
-    enabled = false
-  }
-  maintenance_options {
-    auto_recovery = "default"
-  }
-  metadata_options {
-    http_endpoint               = "enabled"
-    http_protocol_ipv6          = "disabled"
-    http_put_response_hop_limit = 2
-    http_tokens                 = "required"
-    instance_metadata_tags      = "disabled"
-  }
-  private_dns_name_options {
-    enable_resource_name_dns_a_record    = false
-    enable_resource_name_dns_aaaa_record = false
-    hostname_type                        = "ip-name"
-  }
-  root_block_device {
-    delete_on_termination = true
-    encrypted             = false
-    iops                  = 3000
-    tags                  = {}
-    tags_all              = {}
-    throughput            = 125
-    volume_size           = 30
-    volume_type           = "gp3"
-  }
-}
 
 resource "aws_cloudwatch_dashboard" "meety_v1" {
   dashboard_body = jsonencode({

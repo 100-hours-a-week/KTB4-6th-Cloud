@@ -12,3 +12,13 @@ output "security_group_id" {
   description = "BE 접근과 임시 복제 연결을 구분하는 Redis 보안 그룹 ID"
   value       = aws_security_group.redis.id
 }
+
+output "sentinel_master_name" {
+  description = "Sentinel이 감시하는 Master 이름. Sentinel을 켜지 않으면 null"
+  value       = var.sentinel_enabled ? local.sentinel_master_name : null
+}
+
+output "sentinel_nodes" {
+  description = "BE가 접속할 Sentinel 주소 목록(host:port). Sentinel을 켜지 않으면 빈 목록"
+  value       = var.sentinel_enabled ? [for port in local.sentinel_ports : "${aws_instance.redis.private_ip}:${port}"] : []
+}

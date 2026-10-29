@@ -418,6 +418,12 @@ variable "redis_use_dedicated_instance" {
   default     = true
 }
 
+variable "redis_sentinel_enabled" {
+  description = "전용 Redis 서버에 Replica와 Sentinel 3개를 함께 띄우고 BE가 Sentinel로 접속하게 한다(#89 장애 실험). 바꾸면 Redis 인스턴스가 교체되고 BE 재배포가 필요하다"
+  type        = bool
+  default     = true
+}
+
 variable "redis_migration_access_enabled" {
   description = "기존 DB 서버 Redis에서 전용 Redis로 복제할 임시 접속 허용. 이전 검증 후 false로 닫는다"
   type        = bool

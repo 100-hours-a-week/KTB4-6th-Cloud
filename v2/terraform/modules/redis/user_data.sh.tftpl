@@ -39,6 +39,40 @@ maxmemory ${maxmemory_mb}mb
 # 로그아웃 토큰 등의 키를 메모리 부족 때문에 임의로 지우지 않는다.
 maxmemory-policy noeviction
 CONF
+%{ if sentinel_enabled ~}
+
+# 장애 실험용: 같은 서버에 Replica 1개와 Sentinel 3개를 띄운다. 호스트 장애에는 대응하지 않는다.
+# Failover 뒤 옛 Master가 Replica로 붙으려면 두 Redis 모두 masterauth가 필요하다.
+cat >> /opt/meety/redis-conf/redis.conf <<'CONF'
+masterauth __REDIS_PASSWORD__
+replica-announce-ip ${private_ip}
+CONF
+install -d -m 700 -o "$REDIS_UID" -g "$REDIS_GID" /opt/meety/redis-replica-conf
+sed -e 's/^port 6379$/port ${replica_port}/' /opt/meety/redis-conf/redis.conf > /opt/meety/redis-replica-conf/redis.conf
+printf 'replicaof ${private_ip} 6379\n' >> /opt/meety/redis-replica-conf/redis.conf
+
+# Sentinel은 감시 결과를 설정 파일에 다시 쓰므로 Sentinel마다 쓰기 가능한 디렉터리를 둔다.
+# 3개 중 2개가 동의하면 장애로 판정하고, 과반수(2)의 승인으로 Failover한다.
+for port in ${join(" ", sentinel_ports)}; do
+  install -d -m 700 -o "$REDIS_UID" -g "$REDIS_GID" "/opt/meety/sentinel-$port-conf"
+  cat > "/opt/meety/sentinel-$port-conf/sentinel.conf" <<CONF
+port $port
+bind 0.0.0.0
+protected-mode yes
+requirepass __REDIS_PASSWORD__
+dir /tmp
+sentinel resolve-hostnames no
+sentinel announce-ip ${private_ip}
+sentinel announce-port $port
+sentinel sentinel-pass __REDIS_PASSWORD__
+sentinel monitor ${sentinel_master_name} ${private_ip} 6379 2
+sentinel auth-pass ${sentinel_master_name} __REDIS_PASSWORD__
+sentinel down-after-milliseconds ${sentinel_master_name} 5000
+sentinel failover-timeout ${sentinel_master_name} 60000
+sentinel parallel-syncs ${sentinel_master_name} 1
+CONF
+done
+%{ endif ~}
 
 cat > /opt/meety/docker-compose.yml <<'COMPOSE'
 services:
@@ -46,8 +80,13 @@ services:
     container_name: ${container_name}
     image: ${redis_image}
     restart: unless-stopped
+%{ if sentinel_enabled ~}
+    # Replica와 Sentinel이 서로를 사설 IP로 찾도록 호스트 네트워크를 쓴다.
+    network_mode: host
+%{ else ~}
     ports:
       - "6379:6379"
+%{ endif ~}
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     environment:
       # 인증한 PING으로 헬스체크한다. 값이 담긴 compose 파일은 root만 읽을 수 있다.
@@ -67,9 +106,62 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+%{ if sentinel_enabled ~}
+
+  redis-replica:
+    container_name: ${container_name}-replica
+    image: ${redis_image}
+    restart: unless-stopped
+    network_mode: host
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    environment:
+      REDISCLI_AUTH: __REDIS_AUTH__
+    volumes:
+      - ./redis-replica-conf:/usr/local/etc/redis
+      - redis_replica_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", 'test "$$(redis-cli --no-auth-warning -p ${replica_port} ping)" = PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+%{ for port in sentinel_ports ~}
+
+  sentinel-${port}:
+    container_name: ${container_name}-sentinel-${port}
+    image: ${redis_image}
+    restart: unless-stopped
+    network_mode: host
+    # redis-server로 실행해야 이미지 진입점이 redis 사용자로 권한을 낮춘다.
+    command: ["redis-server", "/usr/local/etc/redis/sentinel.conf", "--sentinel"]
+    environment:
+      REDISCLI_AUTH: __REDIS_AUTH__
+    volumes:
+      - ./sentinel-${port}-conf:/usr/local/etc/redis
+    healthcheck:
+      test: ["CMD-SHELL", 'test "$$(redis-cli --no-auth-warning -p ${port} ping)" = PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+%{ endfor ~}
+%{ endif ~}
 
 volumes:
   redis_data:
+%{ if sentinel_enabled ~}
+  redis_replica_data:
+%{ endif ~}
 COMPOSE
 
 # 설정 형식별로 비밀값을 이스케이프한다. 값·렌더링 결과는 로그에 출력하지 않는다.
@@ -83,12 +175,22 @@ config = pathlib.Path("/opt/meety/redis-conf/redis.conf")
 # Redis 설정의 따옴표 안에서 UTF-8 바이트를 안전하게 표현한다.
 quoted = '"' + ''.join('\\x%02x' % byte for byte in password.encode()) + '"'
 config.write_text(config.read_text().replace("__REDIS_PASSWORD__", quoted))
+%{ if sentinel_enabled ~}
+for extra in pathlib.Path("/opt/meety").glob("*-conf/*.conf"):
+    extra.write_text(extra.read_text().replace("__REDIS_PASSWORD__", quoted))
+%{ endif ~}
 compose = pathlib.Path("/opt/meety/docker-compose.yml")
 compose.write_text(compose.read_text().replace("__REDIS_AUTH__", json.dumps(password, ensure_ascii=False).replace('$', '$$')))
 PY
 unset REDIS_PASSWORD
 chown "$REDIS_UID:$REDIS_GID" /opt/meety/redis-conf/redis.conf
 chmod 600 /opt/meety/redis-conf/redis.conf /opt/meety/docker-compose.yml
+%{ if sentinel_enabled ~}
+for extra in /opt/meety/redis-replica-conf/redis.conf /opt/meety/sentinel-*-conf/sentinel.conf; do
+  chown "$REDIS_UID:$REDIS_GID" "$extra"
+  chmod 600 "$extra"
+done
+%{ endif ~}
 
 cd /opt/meety
 docker compose up -d --wait --wait-timeout 180

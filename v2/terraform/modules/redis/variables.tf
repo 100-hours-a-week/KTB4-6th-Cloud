@@ -73,6 +73,18 @@ variable "ssm_kms_key_arn" {
   type        = string
 }
 
+variable "sentinel_enabled" {
+  description = "같은 서버에 Replica 1개와 Sentinel 3개를 함께 띄운다. 장애 실험용이며 호스트 장애에는 대응하지 않는다"
+  type        = bool
+  default     = false
+}
+
+variable "user_data_replace_on_change" {
+  description = "user_data가 바뀌면 인스턴스를 교체해 초기 설정을 다시 실행한다. 교체하면 루트 볼륨의 AOF 데이터가 사라진다"
+  type        = bool
+  default     = false
+}
+
 variable "volume_tags" {
   description = "provider 기본 태그가 자동 적용되지 않는 루트 볼륨용 태그"
   type        = map(string)

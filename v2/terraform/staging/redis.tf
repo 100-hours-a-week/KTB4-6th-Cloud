@@ -15,6 +15,9 @@ module "redis" {
   root_volume_size     = var.redis_root_volume_size
   redis_image          = var.db_redis_image
   maxmemory_mb         = var.redis_maxmemory_mb
+  sentinel_enabled     = var.redis_sentinel_enabled
+  # staging은 데이터를 보존하지 않아도 되므로, 설정이 바뀌면 인스턴스를 교체해 새 설정으로 다시 띄운다.
+  user_data_replace_on_change = true
   # 비밀번호 경로를 유지해 앱의 시크릿 설정과 데이터 이전을 동시에 바꾸지 않는다.
   password_parameter_arn = "${local.param_arn_prefix}/db/REDIS_PASSWORD"
   ssm_kms_key_arn        = data.aws_kms_alias.ssm.target_key_arn

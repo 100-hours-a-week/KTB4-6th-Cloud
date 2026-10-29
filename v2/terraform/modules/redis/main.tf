@@ -16,6 +16,37 @@ resource "aws_vpc_security_group_ingress_rule" "from_be" {
   to_port                      = 6379
 }
 
+locals {
+  # Sentinel 실험 구성은 한 서버에 모두 띄우므로 포트로 구분한다. Master는 기존과 같은 6379다.
+  replica_port         = 6380
+  sentinel_ports       = [26379, 26380, 26381]
+  sentinel_master_name = "meety"
+}
+
+# Failover 뒤에는 Replica(6380)가 Master가 되므로 BE가 두 포트 모두에 접속할 수 있어야 한다.
+resource "aws_vpc_security_group_ingress_rule" "replica_from_be" {
+  count = var.sentinel_enabled ? 1 : 0
+
+  security_group_id            = aws_security_group.redis.id
+  description                  = "Redis replica from environment BE"
+  referenced_security_group_id = var.be_security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = local.replica_port
+  to_port                      = local.replica_port
+}
+
+# BE가 현재 Master 주소를 Sentinel에게 묻는다. 같은 서버 안의 복제·감시 연결은 보안 그룹을 거치지 않는다.
+resource "aws_vpc_security_group_ingress_rule" "sentinel_from_be" {
+  count = var.sentinel_enabled ? 1 : 0
+
+  security_group_id            = aws_security_group.redis.id
+  description                  = "Redis Sentinel from environment BE"
+  referenced_security_group_id = var.be_security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = min(local.sentinel_ports...)
+  to_port                      = max(local.sentinel_ports...)
+}
+
 # 패키지 설치·SSM 접속과, 이전 중 기존 Redis에서 복제받는 연결에 사용한다.
 resource "aws_vpc_security_group_egress_rule" "outbound" {
   security_group_id = aws_security_group.redis.id
@@ -93,12 +124,19 @@ resource "aws_instance" "redis" {
   iam_instance_profile        = aws_iam_instance_profile.redis.name
 
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
-    region         = var.region
-    parameter_name = split(":parameter", var.password_parameter_arn)[1]
-    redis_image    = var.redis_image
-    container_name = "${var.env}-redis"
-    maxmemory_mb   = var.maxmemory_mb
+    region               = var.region
+    parameter_name       = split(":parameter", var.password_parameter_arn)[1]
+    redis_image          = var.redis_image
+    container_name       = "${var.env}-redis"
+    maxmemory_mb         = var.maxmemory_mb
+    sentinel_enabled     = var.sentinel_enabled
+    private_ip           = var.private_ip
+    replica_port         = local.replica_port
+    sentinel_ports       = local.sentinel_ports
+    sentinel_master_name = local.sentinel_master_name
   })
+  # user_data는 첫 부팅에만 실행된다. 설정을 다시 적용하려면 인스턴스를 교체해야 하며, 이때 AOF 데이터는 사라진다.
+  user_data_replace_on_change = var.user_data_replace_on_change
 
   # 초기 용량은 실측 전이다. CPU 크레딧 소진으로 추가 요금이 발생하지 않게 한다.
   credit_specification {

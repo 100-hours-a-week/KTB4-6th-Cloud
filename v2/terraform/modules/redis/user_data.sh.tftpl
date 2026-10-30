@@ -13,6 +13,7 @@ printf 'vm.overcommit_memory = 1\n' > /etc/sysctl.d/99-meety-redis.conf
 sysctl -p /etc/sysctl.d/99-meety-redis.conf
 
 install -d -m 700 /opt/meety
+install -d -m 755 /opt/meety/redis-empty-modules
 umask 077
 REDIS_PASSWORD=$(/snap/bin/aws ssm get-parameter --region '${region}' \
   --name '${parameter_name}' --with-decryption --query Parameter.Value --output text)
@@ -95,6 +96,7 @@ services:
       # 디렉터리를 마운트해야 CONFIG REWRITE의 파일 교체가 가능하다.
       - ./redis-conf:/usr/local/etc/redis
       - redis_data:/data
+      - ./redis-empty-modules:/usr/local/lib/redis/modules:ro
     healthcheck:
       test: ["CMD-SHELL", 'test "$$(redis-cli --no-auth-warning ping)" = PONG']
       interval: 5s
@@ -119,6 +121,7 @@ services:
     volumes:
       - ./redis-replica-conf:/usr/local/etc/redis
       - redis_replica_data:/data
+      - ./redis-empty-modules:/usr/local/lib/redis/modules:ro
     healthcheck:
       test: ["CMD-SHELL", 'test "$$(redis-cli --no-auth-warning -p ${replica_port} ping)" = PONG']
       interval: 5s

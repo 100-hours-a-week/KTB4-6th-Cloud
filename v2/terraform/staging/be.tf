@@ -80,6 +80,9 @@ resource "aws_ecs_task_definition" "be" {
       # ALB 유휴 타임아웃(60초)과 부하 스크립트의 요청 타임아웃보다 짧게 둔다
       { name = "MIGRATION_WRITE_GATE_MAX_WAIT", value = "30s" },
       { name = "AUTH_ACCESS_TOKEN_COOKIE_NAME", value = "staging_accessToken" },
+      # Redis 제어 명령이 유실돼도 녹음 STOP, PAUSE/RESUME 상태를 DB 기준으로 주기적으로 보정한다
+      { name = "RECORDING_STOP_RECONCILIATION_ENABLED", value = "true" },
+      { name = "RECORDING_PAUSE_RESUME_RECONCILIATION_ENABLED", value = "true" },
       ], var.be_db_read_enabled ? [
       # 읽기 풀은 같은 ProxySQL에 읽기 계정으로 접속하고, ProxySQL이 Replica로 보낸다.
       # 값이 없으면 BE는 읽기 풀도 쓰기 접속 정보를 쓴다

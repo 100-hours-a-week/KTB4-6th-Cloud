@@ -80,18 +80,14 @@ resource "aws_ecs_task_definition" "be" {
       # ALB 유휴 타임아웃(60초)과 부하 스크립트의 요청 타임아웃보다 짧게 둔다
       { name = "MIGRATION_WRITE_GATE_MAX_WAIT", value = "30s" },
       { name = "AUTH_ACCESS_TOKEN_COOKIE_NAME", value = "staging_accessToken" },
+      # Redis 제어 명령이 유실돼도 녹음 STOP, PAUSE/RESUME 상태를 DB 기준으로 주기적으로 보정한다
+      { name = "RECORDING_STOP_RECONCILIATION_ENABLED", value = "true" },
+      { name = "RECORDING_PAUSE_RESUME_RECONCILIATION_ENABLED", value = "true" },
       ], var.be_db_read_enabled ? [
       # 읽기 풀은 같은 ProxySQL에 읽기 계정으로 접속하고, ProxySQL이 Replica로 보낸다.
       # 값이 없으면 BE는 읽기 풀도 쓰기 접속 정보를 쓴다
       { name = "DB_READ_HOST", value = "127.0.0.1" },
       { name = "DB_READ_PORT", value = "6033" },
-      ] : [], var.redis_sentinel_enabled ? [
-      # Sentinel 설정이 있으면 Spring은 REDIS_HOST 대신 Sentinel에게 현재 Master 주소를 물어 접속한다
-      { name = "SPRING_DATA_REDIS_SENTINEL_MASTER", value = module.redis.sentinel_master_name },
-      { name = "SPRING_DATA_REDIS_SENTINEL_NODES", value = join(",", module.redis.sentinel_nodes) },
-      # 장애 실험용: Lettuce 기본 명령 타임아웃(60초) 대신 짧게 실패시키고, Redis 장애 중 누락된 STOP을 DB 상태로 보정한다(간격 기본 3초)
-      { name = "SPRING_DATA_REDIS_TIMEOUT", value = "2s" },
-      { name = "RECORDING_STOP_RECONCILIATION_ENABLED", value = "true" },
     ] : [])
 
     # 비밀값은 태스크가 시작할 때 ECS가 Parameter Store에서 읽어 넣는다 (실행 역할 권한).
@@ -111,9 +107,6 @@ resource "aws_ecs_task_definition" "be" {
       ], var.be_db_read_enabled ? [
       { name = "DB_READ_USERNAME", valueFrom = "${local.param_arn_prefix}/db/DB_READ_USER" },
       { name = "DB_READ_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/DB_READ_PASSWORD" },
-      ] : [], var.redis_sentinel_enabled ? [
-      # Sentinel도 Redis와 같은 비밀번호를 쓴다
-      { name = "SPRING_DATA_REDIS_SENTINEL_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/REDIS_PASSWORD" },
     ] : [])
 
     logConfiguration = {

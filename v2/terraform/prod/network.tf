@@ -42,14 +42,6 @@ resource "aws_route" "private_nat" {
   network_interface_id   = aws_instance.fe.primary_network_interface_id
 }
 
-# V1(오하이오) VPC로 가는 트래픽은 피어링으로 보낸다. 서울 prod DB가 오하이오 prod MySQL을 덤프, 복제할 때 쓴다.
-# 피어링 연결 쪽 오하이오 라우팅은 V1 public 라우트 테이블에 V2 VPC 전체(10.1.0.0/16)로 이미 있다
-resource "aws_route" "private_v1" {
-  route_table_id            = aws_route_table.private.id
-  destination_cidr_block    = var.v1_vpc_cidr
-  vpc_peering_connection_id = local.shared.v1_peering_connection_id
-}
-
 resource "aws_route_table_association" "private" {
   count = length(aws_subnet.private)
 

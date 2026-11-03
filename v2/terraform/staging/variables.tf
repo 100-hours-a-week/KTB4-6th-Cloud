@@ -4,12 +4,6 @@ variable "project" {
   default     = "meety"
 }
 
-variable "v1_vpc_cidr" {
-  description = "V1(오하이오) VPC 대역. 피어링 경로의 목적지로 쓴다"
-  type        = string
-  default     = "10.0.0.0/16"
-}
-
 variable "env" {
   description = "환경 이름. prod 폴더에서는 prod로 바꾼다"
   type        = string
@@ -96,17 +90,6 @@ variable "be_realtime_paths" {
     "/api/v1/meetings/*/events",
     "/api/v1/notifications/events",
   ]
-}
-
-variable "be_migration_write_gate_enabled" {
-  description = <<-EOT
-    BE DB 쓰기 게이트 사용 여부.
-    V1 dev 이전 리허설 동안에는 true로 두어 복제 중 서울 DB 쓰기를 막는다.
-    켜진 태스크는 재시작할 때마다 닫힌 채로 뜨므로, 전환이 끝나면 false로 바꿔 배포한다.
-    리허설을 마치고 dev를 오하이오로 되돌려 false로 둔다 (2026-10-15).
-  EOT
-  type        = bool
-  default     = false
 }
 
 variable "be_proxysql_enabled" {
@@ -251,30 +234,6 @@ variable "db_replica_server_id" {
   description = "Read Replica MySQL server_id. 복제하는 서버끼리 겹치면 안 된다 (V1 dev·prod 1, staging Primary 2, 리허설용 3, prod 4·5)"
   type        = number
   default     = 6
-}
-
-variable "migration_rehearsal_enabled" {
-  description = "일회성 서울 DB 이전 리허설 리소스 생성 여부. 종료 후에는 비활성 상태로 유지한다"
-  type        = bool
-  default     = false
-}
-
-variable "db_migration_private_ip" {
-  description = "오하이오 dev DB 마이그레이션 리허설용 MySQL 사설 IP (private 서브넷 2c)"
-  type        = string
-  default     = "10.1.11.133"
-}
-
-variable "db_migration_server_id" {
-  description = "오하이오 dev와 복제할 서울 리허설 MySQL의 고유 server_id"
-  type        = number
-  default     = 7
-}
-
-variable "db_migration_root_volume_size" {
-  description = "일회성 DB 이전 리허설 서버의 암호화 루트 볼륨 크기(GB)"
-  type        = number
-  default     = 30
 }
 
 variable "db_mysql_image" {

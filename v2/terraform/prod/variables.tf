@@ -4,12 +4,6 @@ variable "project" {
   default     = "meety"
 }
 
-variable "v1_vpc_cidr" {
-  description = "V1(오하이오) VPC 대역. 피어링 경로의 목적지로 쓴다 (오하이오 prod DB를 서울로 옮길 때 덤프, 복제)"
-  type        = string
-  default     = "10.0.0.0/16"
-}
-
 variable "env" {
   description = "환경 이름"
   type        = string

@@ -74,11 +74,6 @@ resource "aws_ecs_task_definition" "be" {
       { name = "CREDIT_SUMMARY_REGENERATE_COST", value = "0" },
       { name = "CREDIT_AI_CHAT_MESSAGE_COST", value = "0" },
       { name = "CREDIT_ANALYSIS_REPORT_COST", value = "0" },
-      # DB 이전 리허설용 쓰기 게이트. 켜면 닫힌 채로 기동하고, 관리 API로 열 때까지 DB 쓰기를 대기시킨다
-      { name = "MIGRATION_WRITE_GATE_ENABLED", value = tostring(var.be_migration_write_gate_enabled) },
-      # 게이트가 닫힌 동안 쓰기 요청이 기다리는 최대 시간. 1차 리허설에서 기본값 10초로는 수동 전환 구간을 넘기지 못했다.
-      # ALB 유휴 타임아웃(60초)과 부하 스크립트의 요청 타임아웃보다 짧게 둔다
-      { name = "MIGRATION_WRITE_GATE_MAX_WAIT", value = "30s" },
       { name = "AUTH_ACCESS_TOKEN_COOKIE_NAME", value = "staging_accessToken" },
       # Redis 제어 명령이 유실돼도 녹음 STOP, PAUSE/RESUME 상태를 DB 기준으로 주기적으로 보정한다
       { name = "RECORDING_STOP_RECONCILIATION_ENABLED", value = "true" },
@@ -102,8 +97,6 @@ resource "aws_ecs_task_definition" "be" {
       { name = "KAKAO_CLIENT_SECRET", valueFrom = "${local.param_arn_prefix}/be/KAKAO_CLIENT_SECRET" },
       { name = "KAKAO_ADMIN_KEY", valueFrom = "${local.param_arn_prefix}/be/KAKAO_ADMIN_KEY" },
       { name = "INTERNAL_API_KEY", valueFrom = "${local.param_arn_prefix}/be/INTERNAL_API_KEY" },
-      # 게이트 관리 API 토큰(32자 이상). Parameter Store에 값이 없으면 태스크가 시작되지 않는다
-      { name = "MIGRATION_WRITE_GATE_ADMIN_TOKEN", valueFrom = "${local.param_arn_prefix}/be/MIGRATION_WRITE_GATE_ADMIN_TOKEN" },
       ], var.be_db_read_enabled ? [
       { name = "DB_READ_USERNAME", valueFrom = "${local.param_arn_prefix}/db/DB_READ_USER" },
       { name = "DB_READ_PASSWORD", valueFrom = "${local.param_arn_prefix}/db/DB_READ_PASSWORD" },

@@ -49,6 +49,6 @@ v1/migration/switch-*.out
 v1/migration/verify-*.out
 v1/migration/k6-*.html
 
-# staging 자동 on/off
-v2/scripts
-v2/terraform/staging/power_schedule.tf
+# staging 전원 제어 스크립트만 추적하고 로컬 백업 파일은 제외한다.
+v2/scripts/*
+!v2/scripts/staging-power.sh

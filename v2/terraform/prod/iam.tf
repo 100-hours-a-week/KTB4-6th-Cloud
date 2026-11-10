@@ -375,6 +375,36 @@ resource "aws_iam_role_policy" "gha_deploy" {
         Resource = "*"
       },
       {
+        # ListTasks는 서비스 ARN 제한을 지원하지 않으므로 환경별 클러스터 조건으로 제한한다.
+        Sid      = "ListBeDiagnosticTasks"
+        Effect   = "Allow"
+        Action   = "ecs:ListTasks"
+        Resource = "*"
+        Condition = {
+          ArnEquals = { "ecs:cluster" = aws_ecs_cluster.main.arn }
+        }
+      },
+      {
+        # 배포 때마다 바뀌는 태스크 ID만 와일드카드로 허용하고 환경별 클러스터는 고정한다.
+        Sid      = "DescribeBeDiagnosticTasks"
+        Effect   = "Allow"
+        Action   = "ecs:DescribeTasks"
+        Resource = "${replace(aws_ecs_cluster.main.arn, ":cluster/", ":task/")}/*"
+        Condition = {
+          ArnEquals = { "ecs:cluster" = aws_ecs_cluster.main.arn }
+        }
+      },
+      {
+        # DescribeTargetHealth는 리소스 단위 권한을 지원하지 않아 조회 리전을 제한한다.
+        Sid      = "ReadBeTargetHealth"
+        Effect   = "Allow"
+        Action   = "elasticloadbalancing:DescribeTargetHealth"
+        Resource = "*"
+        Condition = {
+          StringEquals = { "aws:RequestedRegion" = var.region }
+        }
+      },
+      {
         # 새 태스크 정의에 들어가는 실행 역할과 태스크 역할을 ECS에 넘길 때만 허용한다
         Sid      = "PassTaskRoles"
         Effect   = "Allow"

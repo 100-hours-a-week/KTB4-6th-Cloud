@@ -6,15 +6,6 @@ labels: type:change-request
 assignees: kyulimii
 ---
 
-## 대상 환경
-- [ ] prod
-- [ ] dev
-
-## 대상 인스턴스
-- [ ] app
-- [ ] data
-- [ ] ai
-
 ## 요청자
 <!-- 예: BE -->
 - 

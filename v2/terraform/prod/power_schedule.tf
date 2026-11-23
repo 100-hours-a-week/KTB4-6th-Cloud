@@ -1,0 +1,114 @@
+# 매일 한국 시간 00:00에 prod를 종료한다. 켜기는 수동 스크립트(v2/scripts/prod-power.sh)를 사용한다.
+# prod를 실제로 쓰는 날에는 자정 전에 prod-power.sh hold로 예약을 멈추고, 끝나면 release로 되돌린다.
+# 대상: BE ECS 2개, AI EC2 2대, 모니터링 EC2, FE(NAT 겸용), DB Primary와 Replica, Redis
+# 예약은 대상 서버를 한 번에 끈다. 끄는 순서는 자정에 영향이 없고, 켜는 순서는 스크립트가 지킨다.
+# MySQL은 OS 종료 때 Docker가 멈추며, 제때 멈추지 못해도 다음 부팅의 crash recovery로 커밋된 데이터가 복구된다.
+# 종료 예약은 한 번만 실행하므로 자정 이후 수동으로 켜면 다음 자정까지 유지된다. 스크립트의 hold로 예약을 잠시 멈출 수 있다.
+locals {
+  power_timezone = "Asia/Seoul"
+  power_off_cron = "cron(0 0 * * ? *)"
+
+  power_instance_ids = [
+    aws_instance.ai.id,
+    aws_instance.ai_analysis.id,
+    module.monitoring.instance_id,
+    aws_instance.fe.id,
+    aws_instance.db["primary"].id,
+    aws_instance.db["replica"].id,
+    module.redis.instance_id,
+  ]
+
+  power_scalable_targets = {
+    be-api      = aws_appautoscaling_target.be_api
+    be-realtime = aws_appautoscaling_target.be_realtime
+  }
+}
+
+# ECS: 태스크 수만 0으로 바꾸면 오토스케일링이 최소값으로 되돌리므로, 최소·최대값 자체를 바꾼다
+resource "aws_appautoscaling_scheduled_action" "be_off" {
+  for_each = local.power_scalable_targets
+
+  name               = "${local.name_prefix}-${each.key}-off"
+  service_namespace  = each.value.service_namespace
+  resource_id        = each.value.resource_id
+  scalable_dimension = each.value.scalable_dimension
+  schedule           = local.power_off_cron
+  timezone           = local.power_timezone
+
+  scalable_target_action {
+    min_capacity = 0
+    max_capacity = 0
+  }
+}
+
+# EC2: EventBridge Scheduler가 종료 API를 직접 호출한다 (Lambda 없음)
+resource "aws_scheduler_schedule_group" "power" {
+  name = "${local.name_prefix}-power"
+
+  tags = {
+    Name = "${local.name_prefix}-power"
+  }
+}
+
+resource "aws_iam_role" "power_scheduler" {
+  name = "${local.name_prefix}-power-scheduler"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "scheduler.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+      Condition = {
+        StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id }
+      }
+    }]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-power-scheduler"
+  }
+}
+
+# 대상 서버만 종료할 수 있다. 루트 볼륨은 AWS 관리형 키(aws/ebs)라 KMS 권한은 따로 필요 없다
+resource "aws_iam_role_policy" "power_scheduler" {
+  name = "stop-prod-instances"
+  role = aws_iam_role.power_scheduler.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = ["ec2:StopInstances"]
+      Resource = [
+        for id in local.power_instance_ids :
+        "arn:aws:ec2:${var.region}:${data.aws_caller_identity.current.account_id}:instance/${id}"
+      ]
+    }]
+  })
+}
+
+resource "aws_scheduler_schedule" "ec2" {
+  for_each = {
+    off = { cron = local.power_off_cron, api = "stopInstances" }
+  }
+
+  name                         = "${local.name_prefix}-ec2-${each.key}"
+  group_name                   = aws_scheduler_schedule_group.power.name
+  schedule_expression          = each.value.cron
+  schedule_expression_timezone = local.power_timezone
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = "arn:aws:scheduler:::aws-sdk:ec2:${each.value.api}"
+    role_arn = aws_iam_role.power_scheduler.arn
+    input    = jsonencode({ InstanceIds = local.power_instance_ids })
+
+    retry_policy {
+      maximum_retry_attempts = 3
+    }
+  }
+}

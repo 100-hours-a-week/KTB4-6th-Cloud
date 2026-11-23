@@ -1,11 +1,21 @@
-# 매일 한국 시간 00:00에 staging을 종료한다. 켜기는 수동 스크립트를 사용한다.
-# 대상: BE ECS 2개, AI EC2 2대, 모니터링 EC2. FE·DB·Replica·Redis는 유지한다.
-# 종료 예약은 한 번만 실행하므로 자정 이후 수동으로 켜면 다음 자정까지 유지된다.
+# 매일 한국 시간 00:00에 staging을 종료한다. 켜기는 수동 스크립트(v2/scripts/staging-power.sh)를 사용한다.
+# 대상: BE ECS 2개, AI EC2 2대, 모니터링 EC2, FE(NAT 겸용), DB Primary와 Replica, Redis
+# 예약은 대상 서버를 한 번에 끈다. 끄는 순서는 자정에 영향이 없고, 켜는 순서는 스크립트가 지킨다.
+# MySQL은 OS 종료 때 Docker가 멈추며, 제때 멈추지 못해도 다음 부팅의 crash recovery로 커밋된 데이터가 복구된다.
+# 종료 예약은 한 번만 실행하므로 자정 이후 수동으로 켜면 다음 자정까지 유지된다. 스크립트의 hold로 예약을 잠시 멈출 수 있다.
 locals {
   power_timezone = "Asia/Seoul"
   power_off_cron = "cron(0 0 * * ? *)"
 
-  power_instance_ids = [aws_instance.ai.id, aws_instance.ai_analysis.id, module.monitoring.instance_id]
+  power_instance_ids = [
+    aws_instance.ai.id,
+    aws_instance.ai_analysis.id,
+    module.monitoring.instance_id,
+    aws_instance.fe.id,
+    aws_instance.db.id,
+    aws_instance.db_replica.id,
+    module.redis.instance_id,
+  ]
 
   power_scalable_targets = {
     be-api      = aws_appautoscaling_target.be_api

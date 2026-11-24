@@ -5,8 +5,8 @@
 # hold 중에 apply하면 예약 상태(DISABLED, 예약 확장 중지)가 코드 값으로 되돌아가므로, apply 전에 release를 실행한다
 #
 # 사용: ./staging-power.sh <on|off|status|hold|release> [--profile 프로필]
-#   on      FE(NAT) → DB, Redis → Replica 복제 시작 → AI, 모니터링 → BE 순서로 켜고 정상이 될 때까지 기다린다
-#   off     BE → AI, 모니터링 → DB, Redis(MySQL, Redis를 먼저 정상 종료) → FE 순서로 끈다
+#   on      FE(NAT) → DB, Redis → Replica 복제 시작 → AI, 모니터링, RabbitMQ → BE 순서로 켜고 정상이 될 때까지 기다린다
+#   off     BE → AI, 모니터링, RabbitMQ → DB, Redis(MySQL, Redis를 먼저 정상 종료) → FE 순서로 끈다
 #   status  서버, ECS, 자정 예약, Replica 복제 상태를 보여준다
 #   hold    자정 자동 종료 예약을 멈춘다 (켜 둔 채 밤을 넘겨야 할 때)
 #   release 멈춘 자정 예약을 다시 켠다
@@ -30,7 +30,7 @@ ON_RANGE_be_realtime="1 3"
 FE_NAMES="$PREFIX-fe"
 DATA_NAMES="$PREFIX-db,$PREFIX-db-replica,$PREFIX-redis"
 REPLICA_NAME="$PREFIX-db-replica"
-APP_NAMES="$PREFIX-ai,$PREFIX-ai-analysis,$PREFIX-monitoring"
+APP_NAMES="$PREFIX-ai,$PREFIX-ai-analysis,$PREFIX-monitoring,$PREFIX-rabbitmq"
 SCHEDULE_GROUP="$PREFIX-power"
 SCHEDULE_NAME="$PREFIX-ec2-off"
 # DB, Redis 서버의 compose 파일 위치 (terraform user_data와 같다)
@@ -161,7 +161,7 @@ case "$ACTION" in
     for s in $SERVICES; do set_range "$s" 0 0; done
     echo "BE 태스크를 내리는 중입니다"
     aws ecs wait services-stable --cluster "$CLUSTER" --services $(for s in $SERVICES; do printf '%s ' "$PREFIX-$s"; done)
-    # 2. AI, 모니터링
+    # 2. AI, 모니터링, RabbitMQ
     aws ec2 stop-instances --instance-ids $APP_IDS >/dev/null
     # 3. DB, Redis: 컨테이너를 먼저 정상 종료한다. 실패해도 crash recovery로 복구되므로 경고만 남기고 계속 끈다
     #    직접 멈춘 컨테이너는 재부팅해도 자동으로 뜨지 않으므로 on에서 compose start를 실행한다
@@ -170,7 +170,7 @@ case "$ACTION" in
       ssm_run "$id" "docker compose -f $COMPOSE stop -t 120" || echo "::warning:: $id 컨테이너 정상 종료 실패. 서버 종료는 계속합니다"
     done
     aws ec2 stop-instances --instance-ids $DATA_IDS >/dev/null
-    echo "AI, 모니터링, DB, Redis가 멈출 때까지 기다립니다"
+    echo "AI, 모니터링, RabbitMQ, DB, Redis가 멈출 때까지 기다립니다"
     aws ec2 wait instance-stopped --instance-ids $APP_IDS $DATA_IDS
     # 4. FE(NAT): 다른 서버의 SSM 연결과 외부 통신이 끝난 뒤 마지막에 끈다
     aws ec2 stop-instances --instance-ids $FE_IDS >/dev/null
@@ -193,8 +193,8 @@ case "$ACTION" in
     # 3. Replica 복제 시작과 확인
     echo "Replica 복제를 시작합니다"
     ssm_run "$(running_ids "$REPLICA_NAME")" "$REPLICA_START_CMD" || echo "::warning:: Replica 복제 시작 확인 실패. status로 다시 확인하세요"
-    # 4. AI, 모니터링
-    echo "AI, 모니터링을 켜는 중입니다"
+    # 4. AI, 모니터링, RabbitMQ
+    echo "AI, 모니터링, RabbitMQ를 켜는 중입니다"
     aws ec2 start-instances --instance-ids $APP_IDS >/dev/null
     aws ec2 wait instance-running --instance-ids $APP_IDS
     # 5. BE: DB, Redis가 뜬 뒤 마지막에 켠다

@@ -426,3 +426,21 @@ variable "monitoring_images" {
     grafana    = "grafana/grafana:11.5.2"
   }
 }
+
+variable "rabbitmq_ami_id" {
+  description = "RabbitMQ 서버 AMI. 요청 타입이 t3.small(amd64)이라 AI와 같은 Ubuntu 26.04 amd64를 쓴다. 바꾸면 서버가 교체된다"
+  type        = string
+  default     = "ami-0e677ebf2c8434c2a"
+}
+
+variable "rabbitmq_instance_type" {
+  description = "RabbitMQ 서버 타입 (#102 요청값). 개발·연동 검증용이며 처리 용량은 실측 전이다"
+  type        = string
+  default     = "t3.small"
+}
+
+variable "rabbitmq_root_volume_size" {
+  description = "RabbitMQ 서버 루트 볼륨 크기(GB). OS, RabbitMQ 데이터, 로그를 함께 둔다 (#102 요청값)"
+  type        = number
+  default     = 8
+}

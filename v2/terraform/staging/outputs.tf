@@ -98,3 +98,13 @@ output "monitoring_config_files" {
   description = "모니터링 서버 설정 파일. v2/monitoring/sync-config.sh가 읽어 서버에 반영한다"
   value       = module.monitoring.config_files
 }
+
+output "rabbitmq_instance_id" {
+  description = "staging RabbitMQ 서버 인스턴스 ID. SSM 접속 대상"
+  value       = aws_instance.rabbitmq.id
+}
+
+output "rabbitmq_private_ip" {
+  description = "staging RabbitMQ 서버 Private IP. BE, AI의 AMQP 접속 주소"
+  value       = aws_instance.rabbitmq.private_ip
+}

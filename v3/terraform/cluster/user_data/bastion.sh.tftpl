@@ -1,0 +1,25 @@
+#!/bin/bash
+# V3 클러스터 접속용 EC2 첫 부팅 설정: kubectl, helm 설치와 kubeconfig 안내
+set -euo pipefail
+cd /tmp
+
+# kubectl: 클러스터와 같은 마이너 버전의 최신 패치, 공식 체크섬으로 검증
+KV=$(curl -fsSL https://dl.k8s.io/release/stable-${kubernetes_version}.txt)
+curl -fsSLO "https://dl.k8s.io/release/$KV/bin/linux/arm64/kubectl"
+curl -fsSLO "https://dl.k8s.io/release/$KV/bin/linux/arm64/kubectl.sha256"
+echo "$(cat kubectl.sha256)  kubectl" | sha256sum -c -
+install -m 0755 kubectl /usr/local/bin/kubectl
+
+# helm: 버전을 고정하고 공식 체크섬으로 검증
+HV=v3.19.0
+curl -fsSLO "https://get.helm.sh/helm-$HV-linux-arm64.tar.gz"
+curl -fsSLO "https://get.helm.sh/helm-$HV-linux-arm64.tar.gz.sha256sum"
+sha256sum -c "helm-$HV-linux-arm64.tar.gz.sha256sum"
+tar -xzf "helm-$HV-linux-arm64.tar.gz"
+install -m 0755 linux-arm64/helm /usr/local/bin/helm
+
+# 접속한 사용자가 바로 쓸 수 있게 리전과 kubeconfig 생성 명령을 안내한다
+cat > /etc/profile.d/meety-v3.sh <<'PROFILE'
+export AWS_REGION=${region}
+alias kubeconfig-v3='aws eks update-kubeconfig --region ${region} --name ${cluster_name}'
+PROFILE

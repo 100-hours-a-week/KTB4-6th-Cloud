@@ -6,7 +6,7 @@
 
 | 폴더 | 관리 대상 | state |
 | --- | --- | --- |
-| `cluster/` | EKS 서브넷, 클러스터, `platform` 노드 그룹, 애드온, IAM, Pod Identity 연결, ECR 등. 0단계는 V2 VPC 조회만 한다 | `cluster/terraform.tfstate` (로컬) |
+| `cluster/` | EKS 전용 서브넷과 라우팅, AZ별 NAT 인스턴스, S3 게이트웨이 엔드포인트, 접속용 EC2, EKS 클러스터, `platform` 노드 그룹, 애드온, Pod Identity 연결, Karpenter의 AWS 쪽 리소스 | `cluster/terraform.tfstate` (로컬) |
 
 - V2 VPC와 퍼블릭 서브넷은 `v2/terraform/shared`가 관리한다. 이 폴더는 data source로 조회만 한다.
 - 폴더가 늘어나면 이 표에 추가한다.
@@ -35,6 +35,17 @@ terraform apply tfplan          # 확인한 plan만 반영
 
 - apply 전에 plan의 `destroy`와 `must be replaced`를 반드시 확인한다.
 - V2 리소스(`meety-v2-*`)가 plan에 나오면 멈추고 원인을 확인한다.
+
+## 클러스터 접속
+
+API는 비공개라 접속용 EC2(`meety-v3-bastion`)를 SSM으로 거친다. 접속 명령은 `terraform output -raw bastion_connect`로 본다.
+
+```bash
+# 접속용 EC2 안에서
+bash -l                     # 로그인 셸로 열어 /etc/profile.d 설정을 읽는다
+kubeconfig-v3               # aws eks update-kubeconfig 별칭
+kubectl get nodes
+```
 
 ## state 관리
 

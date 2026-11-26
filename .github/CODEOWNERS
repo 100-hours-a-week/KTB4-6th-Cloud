@@ -1,0 +1,6 @@
+# 5단계 8번 배포 설계 3.1절, 4.3절
+# 기본 담당자는 Cloud다. Terraform(v3/terraform/)과 V1, V2 코드는 Cloud 리뷰 없이 머지하지 않는다.
+* @kyulimii
+
+# staging 값 파일은 담당자를 비워, 배포 검사만 통과하면 자동 머지되게 한다.
+/v3/deploy/envs/staging/
